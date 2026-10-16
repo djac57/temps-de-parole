@@ -92,6 +92,7 @@ select, input[type=search] { font: inherit; color: var(--text); background: var(
 .stack { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; }
 .seg button { border: none; background: none; padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.seg button:disabled { opacity: .4; cursor: not-allowed; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }
 
 /* Course */
@@ -211,7 +212,10 @@ footer a { color: var(--accent); }
     <div class="card">
       <div class="card-head">
         <div><h2>La course au temps d'antenne</h2><p class="sub" id="raceSub">Les 12 personnalités les plus entendues · cliquez une barre pour voir la fiche</p></div>
-        <div class="seg" id="raceMode"><button data-v="cumul" aria-pressed="true">Cumulé</button><button data-v="month" aria-pressed="false">Par mois</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="seg" id="raceEntity"><button data-v="people" aria-pressed="true">Personnalités</button><button data-v="parties" aria-pressed="false">Formations</button></div>
+          <div class="seg" id="raceMode"><button data-v="cumul" aria-pressed="true">Cumulé</button><button data-v="month" aria-pressed="false">Par mois</button></div>
+        </div>
       </div>
       <p class="cand-note on" id="personNote" style="display:none;margin:0 0 10px"></p>
       <div id="race"></div>
@@ -366,7 +370,7 @@ const prettyName = n => { // « NOM Prénom » → « Prénom Nom »
 };
 
 const state = { m0: DEFAULT_M0, m1: LAST, svc: new Set(SVC.map(s => s[0])), chan: -1, types: new Set(TYPES.map((t, i) => i)),
-  raceMode: "cumul", raceMonth: LAST, candOnly: true, streamMode: "abs", focusParty: null, person: null, tableLimit: 25, sort: "total", q: "" };
+  raceMode: "cumul", raceMonth: LAST, raceEntity: "people", candOnly: true, streamMode: "abs", focusParty: null, person: null, tableLimit: 25, sort: "total", q: "" };
 
 const chanOK = ci => state.svc.has(D.channels[ci].t) && (state.chan < 0 || state.chan === ci);
 const recOK = (r, ignorePeriod) => (ignorePeriod || (r[1] >= state.m0 && r[1] <= state.m1)) && state.types.has(r[3]) && chanOK(r[2]);
@@ -485,72 +489,97 @@ function renderKPIs() {
 }
 
 /* ---------- Course ---------- */
-const race = { svg: null, w: 0 };
+// Deux courses : personnalités (relevés depuis 2025) ou formations (relevés par parti depuis 2012)
+const race = { svg: null, w: 0, dur: 650 };
 const N_RACE = 12;
+const raceStart = () => {
+  if (state.raceEntity === "people") return Math.min(state.m1, Math.max(state.m0, PS));
+  let m = state.m0; while (m < state.m1 && GAP[m]) m++; return m;
+};
+function partyTotals(mFrom, mTo) {
+  const t = new Float64Array(D.parties.length);
+  for (const r of D.G) if (r[1] >= mFrom && r[1] <= mTo && state.types.has(r[3]) && chanOK(r[2])) t[r[0]] += r[4];
+  return t;
+}
 function raceData() {
-  const m = state.raceMonth;
-  const tp = state.raceMode === "cumul" ? personTotals(state.m0, m) : personTotals(m, m);
+  const m = state.raceMonth, from = state.raceMode === "cumul" ? raceStart() : m;
+  const tp = state.raceEntity === "people" ? personTotals(from, m) : partyTotals(from, m);
   const idx = [];
   tp.forEach((v, i) => { if (v > 0) idx.push(i); });
   idx.sort((a, b) => tp[b] - tp[a]);
-  return idx.slice(0, N_RACE).map((i, rank) => ({ id: i, v: tp[i], rank }));
+  return idx.slice(0, N_RACE).map((i, rank) => ({ id: i, key: state.raceEntity[0] + i, v: tp[i], rank }));
+}
+const raceName = d => state.raceEntity === "people" ? prettyName(D.people[d.id][0]) : short(D.parties[d.id]);
+const raceParty = d => state.raceEntity === "people" ? D.people[d.id][1] : D.parties[d.id];
+function raceClick(d) {
+  if (state.raceEntity === "people") return selectPerson(d.id);
+  state.focusParty = state.focusParty === D.parties[d.id] ? null : D.parties[d.id]; renderStream();
+}
+function syncRaceEntity() {
+  document.querySelectorAll("#raceEntity button").forEach(x => {
+    x.setAttribute("aria-pressed", x.dataset.v === state.raceEntity);
+    x.disabled = x.dataset.v === "people" && state.m1 < PS;
+  });
+  document.getElementById("raceSub").textContent = state.raceEntity === "parties"
+    ? "Les 12 formations les plus entendues, exécutif inclus · cliquez une barre pour l'isoler dans le graphique plus bas"
+    : (state.candOnly ? "Les 12 candidats 2027 les plus entendus" : "Les 12 personnalités les plus entendues") + " · cliquez une barre pour voir la fiche";
 }
 function renderRace(animate = true) {
   const host = document.getElementById("race");
-  const noPeople = state.m1 < PS;
-  host.style.display = noPeople ? "none" : "";
-  document.querySelector(".race-ctrl").style.display = noPeople ? "none" : "";
-  if (noPeople) return;
   const W = host.clientWidth, rowH = 34, H = N_RACE * rowH + 24, M = { l: 4, r: 70, t: 22 };
   if (!race.svg || race.w !== W) {
     host.replaceChildren(); race.w = W;
-    race.svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Classement animé des personnalités");
+    race.svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Classement animé");
     race.gx = race.svg.append("g").attr("class", "axis").attr("transform", `translate(0,${M.t - 4})`);
-    race.g = race.svg.append("g");
     race.bg = race.svg.append("text").attr("x", W - 10).attr("y", H - 10).attr("text-anchor", "end")
       .style("font", "700 54px Fraunces, Georgia, serif").style("fill", "var(--text)").style("opacity", .07);
+    race.g = race.svg.append("g");
   }
   const data = raceData();
   const x = d3.scaleLinear().domain([0, d3.max(data, d => d.v) || 1]).range([M.l, W - M.r]);
   const y = r => M.t + r * rowH;
-  const t = race.svg.transition().duration(animate ? 650 : 0).ease(d3.easeCubicInOut);
+  const t = race.svg.transition().duration(animate ? race.dur : 0).ease(d3.easeCubicInOut);
   race.gx.transition(t).call(d3.axisTop(x).ticks(W > 500 ? 5 : 3).tickSize(-(N_RACE * rowH)).tickFormat(v => v === 0 ? "" : fmtH(v)));
   race.gx.selectAll(".tick line").attr("stroke", "var(--grid)");
-  const r0 = Math.max(state.m0, PS);
+  const r0 = raceStart();
   race.bg.text(state.raceMode === "cumul" && state.raceMonth !== r0 ? `${ml(r0)} – ${ml(state.raceMonth)}` : MONTHS_FULL[state.raceMonth]);
 
-  const rows = race.g.selectAll("g.bar-row").data(data, d => d.id);
+  const rows = race.g.selectAll("g.bar-row").data(data, d => d.key);
   const enter = rows.enter().append("g").attr("class", "bar-row").attr("tabindex", 0)
     .attr("transform", `translate(0,${y(N_RACE)})`).style("opacity", 0);
   enter.append("rect").attr("class", "bar").attr("x", x(0)).attr("height", rowH - 8).attr("rx", 4).attr("width", 0);
   enter.append("text").attr("class", "nm").attr("y", (rowH - 8) / 2).attr("dy", ".35em").style("font-weight", 600).style("font-size", "12.5px");
   enter.append("text").attr("class", "val").attr("y", (rowH - 8) / 2).attr("dy", ".35em").style("font-size", "12px").style("fill", "var(--text-2)");
-  enter.on("click", (e, d) => selectPerson(d.id))
-    .on("keydown", (e, d) => { if (e.key === "Enter") selectPerson(d.id); })
-    .on("pointermove", (e, d) => showTip(e, t => { const p = D.people[d.id]; t.append(el("div", "t", short(p[1]))); t.append(el("div", "big", fmtH(d.v))); t.append(el("div", null, prettyName(p[0]))); }))
+  enter.on("click", (e, d) => raceClick(d))
+    .on("keydown", (e, d) => { if (e.key === "Enter") raceClick(d); })
+    .on("pointermove", (e, d) => showTip(e, tt => {
+      tt.append(el("div", "t", state.raceEntity === "people" ? short(raceParty(d)) : MONTHS_FULL[state.raceMonth]));
+      tt.append(el("div", "big", fmtH(d.v)));
+      tt.append(el("div", null, state.raceEntity === "people" ? raceName(d) : D.parties[d.id]));
+    }))
     .on("pointerleave", hideTip);
   const all = enter.merge(rows);
-  all.classed("sel", d => d.id === state.person);
+  all.classed("sel", d => state.raceEntity === "people" ? d.id === state.person : D.parties[d.id] === state.focusParty);
   all.transition(t).attr("transform", d => `translate(0,${y(d.rank)})`).style("opacity", 1);
-  all.select("rect").attr("fill", d => pc(D.people[d.id][1])).transition(t).attr("width", d => Math.max(2, x(d.v) - x(0)));
+  all.select("rect").attr("fill", d => pc(raceParty(d))).transition(t).attr("width", d => Math.max(2, x(d.v) - x(0)));
   all.each(function (d) {
-    const g = d3.select(this), bw = x(d.v) - x(0), name = prettyName(D.people[d.id][0]);
+    const g = d3.select(this), bw = x(d.v) - x(0), name = raceName(d);
     const nm = g.select("text.nm"), val = g.select("text.val").text(fmtH(d.v));
-    const full = name + (W > 520 ? "  ·  " + short(D.people[d.id][1]) : "");
+    const full = state.raceEntity === "people" && W > 520 ? name + "  ·  " + short(raceParty(d)) : name;
     const fullW = nm.text(full).node().getComputedTextLength();
     const inside = bw > fullW + 20;
     const label = inside ? full : name;
     const lw = inside ? fullW : nm.text(name).node().getComputedTextLength();
     nm.text(label).transition(t).attr("x", inside ? x(0) + 10 : x(d.v) + 8).style("fill", inside ? "#fff" : "var(--text)");
     const vw = val.node().getComputedTextLength();
-    let vx = inside ? x(d.v) + 8 : x(d.v) + 8 + lw + 10;
+    const vx = inside ? x(d.v) + 8 : x(d.v) + 8 + lw + 10;
     const fits = vx + vw <= W - 2;
     val.transition(t).attr("x", fits ? vx : W - 2).attr("text-anchor", fits ? "start" : "end").style("opacity", fits || inside ? 1 : 0);
   });
   rows.exit().transition(t).attr("transform", `translate(0,${y(N_RACE + 1)})`).style("opacity", 0).remove();
 
   document.getElementById("raceLabel").textContent = MONTHS_FULL[state.raceMonth];
-  const sl = document.getElementById("raceSlider"); sl.min = Math.min(state.m1, Math.max(state.m0, PS)); sl.max = state.m1; sl.value = state.raceMonth;
+  const sl = document.getElementById("raceSlider"); sl.min = r0; sl.max = state.m1; sl.value = state.raceMonth;
 }
 const PLAY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
 const PAUSE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
@@ -559,26 +588,35 @@ const playBtn = document.getElementById("play"); playBtn.innerHTML = PLAY_ICON;
 function stop() { clearInterval(timer); timer = null; playBtn.innerHTML = PLAY_ICON; playBtn.setAttribute("aria-label", "Lecture"); }
 playBtn.onclick = () => {
   if (timer) return stop();
-  if (state.raceMonth >= state.m1) state.raceMonth = Math.min(state.m1, Math.max(state.m0, PS));
+  if (state.raceMonth >= state.m1) state.raceMonth = raceStart();
+  // Une vingtaine de secondes au plus, quelle que soit la longueur de la période
+  const steps = Math.max(1, state.m1 - state.raceMonth), step = Math.max(110, Math.min(900, 22000 / steps));
+  race.dur = Math.min(650, step * .85);
   playBtn.innerHTML = PAUSE_ICON; playBtn.setAttribute("aria-label", "Pause");
   renderRace();
   timer = setInterval(() => {
     if (state.raceMonth >= state.m1) return stop();
-    state.raceMonth++; renderRace();
-  }, 900);
+    do state.raceMonth++; while (state.raceMonth < state.m1 && GAP[state.raceMonth]); // mois sans relevé : sautés
+    renderRace();
+  }, step);
 };
-// Nouvelle période : la course repart du premier mois disponible et se rejoue
+// Nouvelle période : la course repart du début et se rejoue (formations si la période remonte avant 2025)
 function replayRace() {
   stop();
-  const start = Math.max(state.m0, PS);
-  if (state.m1 < PS) return;
-  state.raceMonth = start; renderRace(false);
-  if (state.m1 > start) setTimeout(() => { if (!timer) playBtn.click(); }, 350);
-  else { state.raceMonth = state.m1; renderRace(); }
+  state.raceEntity = state.m0 < PS ? "parties" : "people";
+  syncRaceEntity(); updatePersonNote();
+  state.raceMonth = raceStart(); renderRace(false);
+  if (state.m1 > state.raceMonth) setTimeout(() => { if (!timer) playBtn.click(); }, 350);
 }
-document.getElementById("raceSlider").oninput = e => { stop(); state.raceMonth = +e.target.value; renderRace(); };
+document.getElementById("raceSlider").oninput = e => { stop(); race.dur = 650; state.raceMonth = +e.target.value; renderRace(); };
 document.querySelectorAll("#raceMode button").forEach(b => b.onclick = () => {
   state.raceMode = b.dataset.v; document.querySelectorAll("#raceMode button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderRace();
+});
+document.querySelectorAll("#raceEntity button").forEach(b => b.onclick = () => {
+  if (b.disabled || state.raceEntity === b.dataset.v) return;
+  stop(); state.raceEntity = b.dataset.v; syncRaceEntity(); updatePersonNote();
+  state.raceMonth = raceStart(); renderRace(false);
+  if (state.m1 > state.raceMonth) setTimeout(() => { if (!timer) playBtn.click(); }, 250);
 });
 
 /* ---------- Fiche personnalité ---------- */
@@ -940,13 +978,16 @@ function update() {
   m0.value = state.m0; m1.value = state.m1; syncPresets();
   if (state.raceMonth < state.m0 || state.raceMonth > state.m1) state.raceMonth = state.m1;
   renderCandNote();
+  if (state.m1 < PS) state.raceEntity = "parties"; // aucune personnalité avant 2025
+  syncRaceEntity(); updatePersonNote();
+  renderKPIs(); renderRace(); renderPerson(); renderStream(); renderHeat(); renderTable();
+}
+function updatePersonNote() {
   const pn = document.getElementById("personNote");
-  pn.style.display = state.m0 < PS ? "block" : "none";
+  pn.style.display = state.m0 < PS && state.raceEntity === "people" ? "block" : "none";
   pn.textContent = state.m1 < PS
     ? `Avant ${MONTHS_FULL[PS].toLowerCase()}, l'Arcom ne publie que des relevés par parti : pas de classement par personnalité sur cette période. Les graphiques par formation, plus bas, remontent jusqu'en ${MONTHS_FULL[0].toLowerCase()}.`
     : `Relevés par personnalité disponibles depuis ${MONTHS_FULL[PS].toLowerCase()} seulement : la course, les fiches et le classement couvrent ${MONTHS_FULL[Math.max(PS, state.m0)].toLowerCase()} – ${MONTHS_FULL[state.m1].toLowerCase()}.`;
-  document.getElementById("raceSub").textContent = (state.candOnly ? "Les 12 candidats 2027 les plus entendus" : "Les 12 personnalités les plus entendues") + " · cliquez une barre pour voir la fiche";
-  renderKPIs(); renderRace(); renderPerson(); renderStream(); renderHeat(); renderTable();
 }
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; heat.key = null; update(); }, 150); });
 update();
