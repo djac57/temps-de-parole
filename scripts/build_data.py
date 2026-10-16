@@ -29,6 +29,22 @@ NEW_CHANNEL_TYPES = {"W9": "Chaîne généraliste"}
 ELECTION_NAMES = {"municipales": "Municipales", "presidentielle": "Présidentielle", "legislatives": "Législatives",
                   "europeennes": "Européennes", "europennes": "Européennes", "regionales-departementales": "Régionales"}
 LISTS_LABEL = {"municipales": "Listes municipales (campagne)"}
+EMISSIONS = {"JTF": 0, "MAG": 1, "PROG": 2}
+SERVICE_TYPES = {"Chaînes généralistes": "Chaîne généraliste", "Chaînes d'information": "Chaîne d'information", "Radio": "Radio"}
+
+# Filiations : anciens noms -> nom actuel, pour que les courbes ne se coupent pas
+PARTY_LINEAGE = {
+    "UNION POUR UN MOUVEMENT POPULAIRE": "Les Républicains", "UMP": "Les Républicains",
+    "FRONT NATIONAL": "Rassemblement national",
+    "EN MARCHE": "Renaissance", "LA REPUBLIQUE EN MARCHE": "Renaissance", "ENSEMBLE": "Renaissance",
+    "EUROPE ECOLOGIE LES VERTS": "Les Ecologistes", "LES VERTS": "Les Ecologistes",
+    "MODEM": "Mouvement démocrate", "MOUVEMENT DEMOCRATE": "Mouvement démocrate",
+    "DEBOUT LA REPUBLIQUE": "Debout la France",
+    "GENERATIONS": "Génération.s", "GENERATION S": "Génération.s",
+    "UNION DES DEMOCRATES INDEPENDANTS": "Union des démocrates et indépendants",
+    "PRESIDENCE DE LA REPUBLIQUE": "Président de la République",
+    "COLLABORATEURS DU PRESIDENT DE LA REPUBLIQUE": "Président de la République",
+}
 
 
 def secs(v):
@@ -66,17 +82,38 @@ def idx(lst, v):
     return lst.index(v)
 
 
+def pkey(label):
+    # « PARTI SOCIALISTE », « Parti socialiste » et « Partisocialiste » : même formation
+    return re.sub(r"[^A-Z0-9]", "", norm(label))
+
+
+LINEAGE = {pkey(k): v for k, v in PARTY_LINEAGE.items()}
+party_variants = defaultdict(Counter)  # clé -> graphies rencontrées
+
+
 def party_id(label):
-    # « PARTI SOCIALISTE » et « Parti socialiste » désignent la même formation
-    k = norm(label)
+    label = re.sub(r"\s+", " ", label).strip()
+    k = pkey(label)
+    if k in LINEAGE:
+        label, k = LINEAGE[k], pkey(LINEAGE[k])
+    party_variants[k][label] += 1
     if k not in party_key:
-        party_key[k] = label
-        parties[label] = len(parties)
-    return parties[party_key[k]]
+        party_key[k] = len(parties)
+        parties[k] = len(parties)
+    return parties[k]
+
+
+def party_label(k):
+    # Graphie la plus courante en casse mixte ; sinon, majuscules adoucies
+    v = party_variants[k]
+    mixed = [x for x in v if x != x.upper()]
+    if mixed:
+        return max(mixed, key=lambda x: (v[x], " " in x))
+    return max(v, key=v.get).capitalize()
 
 
 # ---------- Relevés mensuels hors périodes électorales ----------
-paths = sorted(glob.glob(os.path.join(SRC, "*.csv")))
+paths = sorted(glob.glob(os.path.join(SRC, "partis_*.csv")) + glob.glob(os.path.join(SRC, "personnalites_*.csv")))
 monthly = []
 for path in paths:
     rows = list(csv.reader(open(path, encoding="utf-8-sig"), delimiter=";"))
@@ -110,7 +147,18 @@ for path in sorted(glob.glob(os.path.join(SRC, "elections", "*.csv"))):
                 campaign.append((y, mo, chaine, typ, lib, circ, cum - prev, kind))
             prev = cum
 
-periods = sorted({p for p, _ in monthly} | {(c[0], c[1]) for c in campaign})
+# ---------- Historique 2012-2024 (fetch_history.py) : par parti seulement ----------
+history = []
+hist_path = os.path.join(SRC, "history.csv")
+if os.path.exists(hist_path):
+    for r in csv.DictReader(open(hist_path, encoding="utf-8")):
+        y, mo = (int(x) for x in r["mois"].split("-"))
+        history.append((y, mo, r["service"], r["emission"], r["chaine"], r["libelle"], int(r["secondes"])))
+
+seen = {p for p, _ in monthly} | {(c[0], c[1]) for c in campaign} | {(h[0], h[1]) for h in history}
+# Mois continus du premier au dernier : les mois sans relevé publié restent des trous
+(y0, m0), (y1, m1) = min(seen), max(seen)
+periods = [(y, mo) for y in range(y0, y1 + 1) for mo in range(1, 13) if (y0, m0) <= (y, mo) <= (y1, m1)]
 pindex = {p: i for i, p in enumerate(periods)}
 
 for period, rows in monthly:
@@ -145,6 +193,13 @@ for period, rows in monthly:
                 s = secs(r[j]) if j < len(r) else 0
                 if s:
                     G[(gid, m, ci, ti)] += s
+
+HSKIP = ("TOTAL", "DONT", "PARTDE", "PARTDES", "PARTEXEC", "PARTPARTIS")  # mais pas « PARTI… »
+for y, mo, service, emission, chaine, lib, s in history:
+    if pkey(lib).startswith(HSKIP) or emission not in EMISSIONS:
+        continue
+    chan_type.setdefault(chaine, SERVICE_TYPES.get(service, "Chaîne généraliste"))
+    G[(party_id(lib), pindex[(y, mo)], idx(channels, chaine), EMISSIONS[emission])] += s
 
 ROLES = {"Ministre", "Premier Ministre"}
 
@@ -181,7 +236,7 @@ for y, mo, chaine, typ, lib, circ, s, kind in campaign:
 if unmapped:
     print("chaînes de campagne non reconnues :", dict(unmapped), file=sys.stderr)
 
-party_names = list(parties)
+party_names = [party_label(k) for k in parties]
 keys = [k for k, v in people.items() if sum(v["names"].values())]
 pidx = {k: i for i, k in enumerate(keys)}
 people_out = []
@@ -196,6 +251,7 @@ data = {
     "years": [y for y, mm in periods],
     "monthsFull": [f"{FULL[mm - 1]} {y}" for y, mm in periods],
     "ym": [f"{y}-{mm:02d}" for y, mm in periods],
+    "personStart": min((m for _, m, _, _, _ in P), default=0),
     "channels": [{"n": c, "t": chan_type[c]} for c in channels],
     "types": ["Journaux", "Magazines", "Autres programmes", "Campagne électorale"],
     "elections": elections,

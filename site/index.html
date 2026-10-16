@@ -181,9 +181,9 @@ footer a { color: var(--accent); }
 <div class="wrap">
   <header class="hero">
     <div>
-      <div class="eyebrow">Arcom · Pluralisme politique · 2025–2026</div>
+      <div class="eyebrow" id="eyebrow">Arcom · Pluralisme politique</div>
       <h1>Qui parle à la télé et à la radio&nbsp;?</h1>
-      <p class="lede">Le temps de parole des personnalités politiques, mois par mois, sur 25 chaînes et radios nationales, <span id="span"></span>. Choisissez une période, un type de média ou une chaîne&nbsp;: tous les graphiques se mettent à jour.</p>
+      <p class="lede">Le temps de parole des responsables politiques à la télé et à la radio, mois par mois&nbsp;: par parti <span id="span"></span>, et par personnalité depuis janvier 2025. Choisissez une période, un type de média ou une chaîne&nbsp;: tous les graphiques se mettent à jour.</p>
       <p class="source">Source&nbsp;: données publiques <a href="https://www.arcom.fr/temps-parole" target="_blank" rel="noopener">Arcom</a></p>
       <p class="source" id="lag"></p>
     </div>
@@ -213,6 +213,7 @@ footer a { color: var(--accent); }
         <div><h2>La course au temps d'antenne</h2><p class="sub" id="raceSub">Les 12 personnalités les plus entendues · cliquez une barre pour voir la fiche</p></div>
         <div class="seg" id="raceMode"><button data-v="cumul" aria-pressed="true">Cumulé</button><button data-v="month" aria-pressed="false">Par mois</button></div>
       </div>
+      <p class="cand-note on" id="personNote" style="display:none;margin:0 0 10px"></p>
       <div id="race"></div>
       <div class="race-ctrl">
         <button class="play" id="play" aria-label="Lecture"></button>
@@ -263,6 +264,8 @@ footer a { color: var(--accent); }
     Les personnalités sont rattachées à leur formation principale&nbsp;; les membres du gouvernement sans étiquette apparaissent sous «&nbsp;Gouvernement&nbsp;».
     Le graphique par formation et la heatmap utilisent les relevés « partis », qui comptent l'exécutif (Président, Gouvernement) à part.
     Pendant les campagnes électorales (bandeau bleu), l'Arcom publie le temps de parole lié au scrutin à part, par chaîne et par période cumulée&nbsp;: il est réintégré ici mois par mois, sous le type «&nbsp;Campagne&nbsp;» (non ventilé entre JT, magazines et autres), et le temps des listes municipales apparaît sous «&nbsp;Listes municipales (campagne)&nbsp;».
+    Avant 2025, l'Arcom (ex-CSA) publie des tableaux par parti au format Excel ou Word, dont les en-têtes de chaînes sont des logos&nbsp;: ils ont été reconnus un à un. 2014 – août 2015 n'existe qu'en PDF et février – juin 2017 n'a pas de relevé&nbsp;: ces mois sont hachurés.
+    Les anciens noms sont regroupés avec le nom actuel&nbsp;: UMP → Les Républicains, FN → Rassemblement national, En Marche / LREM / Ensemble → Renaissance, EELV → Les Écologistes, i>Télé → CNews, Direct 8 / D8 → C8, NT1 → TFX, Numéro 23 → RMC Story.
     Les chaînes sont classées par audience 2025 (Médiamétrie) au sein de chaque type de média.
     Les relevés « partis » sont complets ; les listes par personnalité ne retiennent que les temps cumulés supérieurs à une minute, d'où un léger écart (≈ 3 %) entre le total et la somme des personnalités.
   </footer>
@@ -273,6 +276,8 @@ footer a { color: var(--accent); }
 const D = window.TP_DATA;
 const MONTHS_FULL = D.monthsFull, NM = D.months.length, LAST = NM - 1;
 const DEFAULT_M0 = D.years.indexOf(D.years[LAST]); // par défaut : l'année la plus récente
+const PS = D.personStart || 0; // premier mois avec des relevés par personnalité (janvier 2025)
+const GAP = (() => { const t = new Float64Array(NM); for (const r of D.G) t[r[1]] += r[4]; return Array.from(t, v => v === 0); })();
 const ml = i => D.months[i] + " " + String(D.years[i]).slice(2); // « Jan 26 »
 const YEARS = [...new Set(D.years)];
 // Décalage de publication : l'Arcom publie chaque mois avec plusieurs mois de retard
@@ -289,7 +294,8 @@ const YEARS = [...new Set(D.years)];
   document.getElementById("lag").textContent = `Dernier mois publié : ${last}. L'Arcom publie ses relevés avec deux à trois mois de décalage`
     + (missing.length ? ` : ${list} ne ${missing.length > 1 ? "sont" : "est"} pas encore disponible${missing.length > 1 ? "s" : ""}.` : ".");
 })();
-document.getElementById("span").textContent = document.getElementById("span2").textContent = `de ${MONTHS_FULL[0].toLowerCase()} à ${MONTHS_FULL[LAST].toLowerCase()}`;
+document.getElementById("eyebrow").textContent = `Arcom · Pluralisme politique · ${D.years[0]}–${D.years[LAST]}`;
+document.getElementById("span").textContent = document.getElementById("span2").textContent = `depuis ${MONTHS_FULL[0].toLowerCase()}`;
 const TYPES = ["JT", "Magazines", "Autres", "Campagne"];
 const SVC = [["Chaîne généraliste","TV généralistes"],["Chaîne d'information","Info continue"],["Radio","Radios"]];
 const CH_NAMES = D.channels.map(c => c.n === "franceinfo:" ? "franceinfo TV" : c.n === "France Info" ? "France Info radio" : c.n === "RMC Decouverte" ? "RMC Découverte" : c.n);
@@ -305,14 +311,14 @@ const PARTY_COLORS = {
   "La France insoumise": "#d4232b", "Parti communiste français": "#9e1b21", "Lutte Ouvrière": "#8e1a1a", "Nouveau parti anticapitaliste": "#a83232",
   "Les Ecologistes": "#2fa84f", "Génération Ecologie": "#66b84a", "Génération.s": "#c45ea0",
   "Gouvernement": "#8a8f9e", "Président de la République": "#b08d57", "Sans étiquette": "#a9a79e", "Divers": "#c9b48f", "Identité-Libertés": "#4a3f73", "La France humaniste": "#8d6e9e",
-  "Debout !": "#e06c4f", "Listes municipales (campagne)": "#8fb5ae", "L'APRES": "#c0392b", "La Convention": "#d98fa0", "Les Patriotes": "#5a6b8c",
+  "Debout !": "#e06c4f", "Parti de gauche": "#b8323a", "Libres": "#5b8fd1", "Nouveau centre": "#6fb9c9", "Front de gauche": "#c23b3b", "Listes municipales (campagne)": "#8fb5ae", "L'APRES": "#c0392b", "La Convention": "#d98fa0", "Les Patriotes": "#5a6b8c",
 };
 const OTHER = "#d3d1c8";
 // Part d'audience 2025 (Médiamétrie). TV : bilan annuel ; radio : vague sept.–oct. 2025 (PdA 13 ans et +).
 // Les valeurs marquées « est » sont des ordres de grandeur, faute de chiffre publié trouvé.
 const AUDIENCE = {
   "TF1": [18.7], "France 2": [14.9], "France 3": [8.6, "est"], "M6": [7.9], "France 5": [3.6, "est"], "TMC": [3.0], "W9": [2.5],
-  "RMC Decouverte": [2.0, "est"], "RMC Story": [1.6, "est"], "RMC Life": [0.5, "est"], "T18": [0.5, "est"], "Novo19": [0.3, "est"], "C8": [0, "est"],
+  "RMC Decouverte": [2.0, "est"], "TFX": [1.8], "Canal+": [1.5, "est"], "France 4": [0.8, "est"], "RMC Story": [1.6, "est"], "RMC Life": [0.5, "est"], "T18": [0.5, "est"], "Novo19": [0.3, "est"], "C8": [0, "est"],
   "CNews": [3.4], "BFMTV": [2.8], "LCI": [2.0], "franceinfo:": [1.0, "est"],
   "France Inter": [13.4], "RTL": [11.5], "RMC": [5.4], "Europe 1": [5.1], "France Info": [5.0],
   "France Culture": [2.5, "est"], "Radio Classique": [1.8, "est"], "Sud Radio": [1.2, "est"], "BFM Business": [0.5, "est"],
@@ -420,7 +426,8 @@ document.getElementById("reset").onclick = () => {
 };
 fillChannels();
 // Raccourcis de période
-const presetDefs = [...YEARS.map(y => [String(y), D.years.indexOf(y), D.years.lastIndexOf(y)]), ["Tout", 0, LAST]];
+const yearRange = y => [String(y), D.years.indexOf(y), D.years.lastIndexOf(y)];
+const presetDefs = [yearRange(YEARS.at(-2)), yearRange(YEARS.at(-1)), ["5 ans", Math.max(0, LAST - 59), LAST], ["Tout", 0, LAST]].filter(d => d[1] >= 0);
 const presetHost = document.getElementById("presets");
 presetDefs.forEach(([label, a, b]) => {
   const c = el("button", "chip", label); c.dataset.a = a; c.dataset.b = b;
@@ -460,15 +467,17 @@ function renderKPIs() {
   const topParty = [...party].filter(([p]) => D.parties[p] !== "Gouvernement" && D.parties[p] !== "Président de la République").sort((a, b) => b[1] - a[1])[0];
   const partyTotal = d3.sum([...party.values()]);
   const chans = new Map();
-  for (const r of D.P) if (recOK(r)) chans.set(r[2], (chans.get(r[2]) || 0) + r[4]);
+  for (const r of D.G) if (recOK(r)) chans.set(r[2], (chans.get(r[2]) || 0) + r[4]);
   const topChan = [...chans].sort((a, b) => b[1] - a[1])[0];
   const items = [
     // Total complet issu des relevés par parti ; les listes par personnalité omettent les cumuls < 1 min
-    state.candOnly
+    state.candOnly && state.m1 >= PS
       ? ["Temps de parole des candidats", fmtH(total), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes`]
-      : ["Temps de parole total", fmtH(partyTotal), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes · dont ${fmtPct(Math.max(0, 1 - total / partyTotal))} sous le seuil d'1 min`],
-    [state.candOnly ? "Candidats 2027 entendus" : "Personnalités entendues", n.toLocaleString("fr-FR"), state.candOnly ? `sur ${CANDIDATES.length} déclarés ou pressentis` : "au moins une seconde d'antenne"],
-    [state.candOnly ? "Candidat n°1" : "Personnalité n°1", best >= 0 ? prettyName(D.people[best][0]) : "—", best >= 0 ? `${fmtH(tp[best])} · ${short(D.people[best][1])}` : ""],
+      : ["Temps de parole total", fmtH(partyTotal), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes` + (state.m0 >= PS ? ` · dont ${fmtPct(Math.max(0, 1 - total / partyTotal))} sous le seuil d'1 min` : "")],
+    state.m1 < PS ? ["Formations entendues", party.size.toLocaleString("fr-FR"), "relevés par personnalité : depuis 2025 seulement"]
+      : [state.candOnly ? "Candidats 2027 entendus" : "Personnalités entendues", n.toLocaleString("fr-FR"), state.candOnly ? `sur ${CANDIDATES.length} déclarés ou pressentis` : "au moins une seconde d'antenne"],
+    state.m1 < PS ? ["Exécutif", fmtPct(((party.get(D.parties.indexOf("Gouvernement")) || 0) + (party.get(D.parties.indexOf("Président de la République")) || 0)) / (partyTotal || 1)), "part du Président et du gouvernement"]
+      : [state.candOnly ? "Candidat n°1" : "Personnalité n°1", best >= 0 ? prettyName(D.people[best][0]) : "—", best >= 0 ? `${fmtH(tp[best])} · ${short(D.people[best][1])}` : ""],
     ["Formation n°1 (hors exécutif)", topParty ? short(D.parties[topParty[0]]) : "—", topParty ? `${fmtPct(topParty[1] / partyTotal)} du temps · ${topChan ? CH_NAMES[topChan[0]] + " la plus bavarde" : ""}` : ""],
   ];
   const c = document.getElementById("kpis"); c.replaceChildren();
@@ -488,6 +497,10 @@ function raceData() {
 }
 function renderRace(animate = true) {
   const host = document.getElementById("race");
+  const noPeople = state.m1 < PS;
+  host.style.display = noPeople ? "none" : "";
+  document.querySelector(".race-ctrl").style.display = noPeople ? "none" : "";
+  if (noPeople) return;
   const W = host.clientWidth, rowH = 34, H = N_RACE * rowH + 24, M = { l: 4, r: 70, t: 22 };
   if (!race.svg || race.w !== W) {
     host.replaceChildren(); race.w = W;
@@ -503,7 +516,8 @@ function renderRace(animate = true) {
   const t = race.svg.transition().duration(animate ? 650 : 0).ease(d3.easeCubicInOut);
   race.gx.transition(t).call(d3.axisTop(x).ticks(W > 500 ? 5 : 3).tickSize(-(N_RACE * rowH)).tickFormat(v => v === 0 ? "" : fmtH(v)));
   race.gx.selectAll(".tick line").attr("stroke", "var(--grid)");
-  race.bg.text(state.raceMode === "cumul" && state.raceMonth !== state.m0 ? `${ml(state.m0)} – ${ml(state.raceMonth)}` : MONTHS_FULL[state.raceMonth]);
+  const r0 = Math.max(state.m0, PS);
+  race.bg.text(state.raceMode === "cumul" && state.raceMonth !== r0 ? `${ml(r0)} – ${ml(state.raceMonth)}` : MONTHS_FULL[state.raceMonth]);
 
   const rows = race.g.selectAll("g.bar-row").data(data, d => d.id);
   const enter = rows.enter().append("g").attr("class", "bar-row").attr("tabindex", 0)
@@ -536,7 +550,7 @@ function renderRace(animate = true) {
   rows.exit().transition(t).attr("transform", `translate(0,${y(N_RACE + 1)})`).style("opacity", 0).remove();
 
   document.getElementById("raceLabel").textContent = MONTHS_FULL[state.raceMonth];
-  const sl = document.getElementById("raceSlider"); sl.min = state.m0; sl.max = state.m1; sl.value = state.raceMonth;
+  const sl = document.getElementById("raceSlider"); sl.min = Math.min(state.m1, Math.max(state.m0, PS)); sl.max = state.m1; sl.value = state.raceMonth;
 }
 const PLAY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
 const PAUSE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
@@ -545,7 +559,7 @@ const playBtn = document.getElementById("play"); playBtn.innerHTML = PLAY_ICON;
 function stop() { clearInterval(timer); timer = null; playBtn.innerHTML = PLAY_ICON; playBtn.setAttribute("aria-label", "Lecture"); }
 playBtn.onclick = () => {
   if (timer) return stop();
-  if (state.raceMonth >= state.m1) state.raceMonth = state.m0;
+  if (state.raceMonth >= state.m1) state.raceMonth = Math.min(state.m1, Math.max(state.m0, PS));
   playBtn.innerHTML = PAUSE_ICON; playBtn.setAttribute("aria-label", "Pause");
   renderRace();
   timer = setInterval(() => {
@@ -563,13 +577,19 @@ function selectPerson(id) { state.person = id; renderPerson(); race.g && race.g.
   if (innerWidth < 900) document.getElementById("personCard").scrollIntoView({ behavior: "smooth", block: "start" }); }
 function renderPerson() {
   const host = document.getElementById("person"); host.replaceChildren();
+  if (state.m1 < PS) {
+    host.append(el("div", "sub", `Fiches disponibles à partir de ${MONTHS_FULL[PS].toLowerCase()} : choisissez une période plus récente (ex. « ${YEARS.at(-1)} »).`));
+    return;
+  }
   const tp = personTotals(state.m0, state.m1);
   if (state.person == null) { let b = 0; tp.forEach((v, i) => { if (v > tp[b]) b = i; }); state.person = b; }
   const id = state.person, p = D.people[id], color = pc(p[1]);
   const rank = 1 + Array.from(tp).filter(v => v > tp[id]).length;
   const totalAll = d3.sum(tp);
   const recs = D.P.filter(r => r[0] === id && state.types.has(r[3]) && chanOK(r[2]));
-  const byMonth = d3.range(NM).map(m => d3.sum(recs.filter(r => r[1] === m), r => r[4]));
+  const MONTHS_P = d3.range(PS, NM);
+  const byMonthAll = new Map(MONTHS_P.map(m => [m, 0])); recs.forEach(r => byMonthAll.set(r[1], (byMonthAll.get(r[1]) || 0) + r[4]));
+  const byMonth = MONTHS_P.map(m => byMonthAll.get(m));
   const inPeriod = recs.filter(r => r[1] >= state.m0 && r[1] <= state.m1);
   const byChan = d3.rollups(inPeriod, v => d3.sum(v, r => r[4]), r => r[2]).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const byType = d3.range(TYPES.length).map(t => d3.sum(inPeriod.filter(r => r[3] === t), r => r[4]));
@@ -590,17 +610,17 @@ function renderPerson() {
   host.append(el("div", "mini-h", "Mois par mois"));
   const W = host.clientWidth || 320, H = 110, M = { t: 14, b: 18 };
   const svg = d3.select(host).append("svg").attr("width", W).attr("height", H);
-  const x = d3.scaleBand().domain(d3.range(NM)).range([0, W]).padding(.22);
+  const x = d3.scaleBand().domain(MONTHS_P).range([0, W]).padding(.22);
   const yM = d3.max(byMonth) || 1, y = d3.scaleLinear().domain([0, yM]).range([H - M.b, M.t]);
-  const g = svg.selectAll("g").data(byMonth).join("g").attr("class", "cell");
-  g.append("rect").attr("x", (d, i) => x(i) - 2).attr("width", x.bandwidth() + 4).attr("y", 0).attr("height", H).attr("fill", "transparent");
-  g.append("path").attr("fill", (d, i) => color).attr("opacity", (d, i) => i >= state.m0 && i <= state.m1 ? 1 : .3)
-    .attr("d", (d, i) => { const h = Math.max(d > 0 ? 2 : 0, y(0) - y(d)), x0 = x(i), w = x.bandwidth(), r = Math.min(4, w / 2, h);
+  const g = svg.selectAll("g").data(MONTHS_P.map((m, k) => ({ m, v: byMonth[k] }))).join("g").attr("class", "cell");
+  g.append("rect").attr("x", d => x(d.m) - 2).attr("width", x.bandwidth() + 4).attr("y", 0).attr("height", H).attr("fill", "transparent");
+  g.append("path").attr("fill", color).attr("opacity", d => d.m >= state.m0 && d.m <= state.m1 ? 1 : .3)
+    .attr("d", ({ m, v }) => { const h = Math.max(v > 0 ? 2 : 0, y(0) - y(v)), x0 = x(m), w = x.bandwidth(), r = Math.min(4, w / 2, h);
       return `M${x0},${y(0)}V${y(0) - h + r}Q${x0},${y(0) - h} ${x0 + r},${y(0) - h}H${x0 + w - r}Q${x0 + w},${y(0) - h} ${x0 + w},${y(0) - h + r}V${y(0)}Z`; });
-  g.append("text").attr("x", (d, i) => x(i) + x.bandwidth() / 2).attr("y", H - 4).attr("text-anchor", "middle").style("font-size", "10px").style("fill", "var(--muted)")
-    .text((d, i) => x.step() >= 30 ? D.months[i] : (i === 0 || D.months[i] === "Jan" || D.months[i] === "Juil") ? (D.months[i] === "Jan" ? ml(i) : D.months[i]) : "");
-  g.on("pointermove", (e, d) => { const i = byMonth.indexOf(d); showTip(e, t => { t.append(el("div", "t", MONTHS_FULL[i])); t.append(el("div", "big", fmtH(d))); }); }).on("pointerleave", hideTip);
-  const peak = byMonth.indexOf(yM);
+  g.append("text").attr("x", d => x(d.m) + x.bandwidth() / 2).attr("y", H - 4).attr("text-anchor", "middle").style("font-size", "10px").style("fill", "var(--muted)")
+    .text(({ m }) => x.step() >= 30 ? D.months[m] : (m === PS || D.months[m] === "Jan" || D.months[m] === "Juil") ? (D.months[m] === "Jan" ? ml(m) : D.months[m]) : "");
+  g.on("pointermove", (e, d) => showTip(e, t => { t.append(el("div", "t", MONTHS_FULL[d.m])); t.append(el("div", "big", fmtH(d.v))); })).on("pointerleave", hideTip);
+  const peak = MONTHS_P[byMonth.indexOf(yM)];
   if (yM > 0) svg.append("text").attr("x", x(peak) + x.bandwidth() / 2).attr("y", y(yM) - 4).attr("text-anchor", "middle").style("font-size", "10.5px").style("font-weight", 600).text(fmtH(yM));
 
   // Chaînes
@@ -647,18 +667,14 @@ search.onkeydown = e => { if (e.key === "Enter") { const f = sugg.querySelector(
 document.addEventListener("click", e => { if (!e.target.closest(".search-wrap")) sugg.style.display = "none"; });
 
 /* ---------- Flux par parti ---------- */
-// Formations nommées : toutes celles qui, sur l'ensemble des relevés, font au moins autant que Place publique
-const STREAM_PARTIES = (() => {
-  const t = new Map(); for (const r of D.G) t.set(r[0], (t.get(r[0]) || 0) + r[4]);
-  const ranked = [...t].sort((a, b) => b[1] - a[1]).map(d => D.parties[d[0]]);
-  return ranked.slice(0, ranked.indexOf("Place publique") + 1);
-})();
+// Formations nommées : les 18 plus présentes sur la période (de quoi aller jusqu'à Place publique en 2025-2026)
+const N_STREAM = 18;
 function streamData() {
   const by = d3.range(NM).map(() => new Map());
   for (const r of D.G) if (recOK(r, true)) by[r[1]].set(r[0], (by[r[1]].get(r[0]) || 0) + r[4]);
   const tot = new Map();
   for (let m = state.m0; m <= state.m1; m++) by[m].forEach((v, k) => tot.set(k, (tot.get(k) || 0) + v));
-  const keys = [...tot].sort((a, b) => b[1] - a[1]).map(d => D.parties[d[0]]).filter(k => STREAM_PARTIES.includes(k));
+  const keys = [...tot].sort((a, b) => b[1] - a[1]).slice(0, N_STREAM).map(d => D.parties[d[0]]);
   const rows = by.map((mp, m) => {
     const o = { m, Autres: 0 }; keys.forEach(k => o[k] = 0);
     mp.forEach((v, k) => { const n = D.parties[k]; if (n in o) o[n] += v; else o.Autres += v; });
@@ -671,32 +687,50 @@ function renderStream() {
   const { keys, rows } = streamData();
   const W = host.clientWidth, H = W < 560 ? 260 : 340, M = { l: 48, r: 12, t: 10, b: 26 };
   const pct = state.streamMode === "pct";
-  const stackRows = rows.map(r => { const s = d3.sum(keys, k => r[k]) || 1; const o = { m: r.m }; keys.forEach(k => o[k] = pct ? r[k] / s : r[k] / 3600); return o; });
+  const span = state.m1 - state.m0 + 1;
+  let view = rows.slice(state.m0, state.m1 + 1);
+  if (span === 1) view = [{ ...view[0], m: state.m0 - .45 }, { ...view[0], m: state.m0 + .45 }]; // un seul mois : une bande
+  const stackRows = view.map(r => { const s = d3.sum(keys, k => r[k]) || 1; const o = { m: r.m }; keys.forEach(k => o[k] = pct ? r[k] / s : r[k] / 3600); return o; });
   const series = d3.stack().keys(keys).order(d3.stackOrderNone)(stackRows);
-  const x = d3.scaleLinear().domain([0, LAST]).range([M.l, W - M.r]);
+  const x = d3.scaleLinear().domain(span === 1 ? [state.m0 - .5, state.m0 + .5] : [state.m0, state.m1]).range([M.l, W - M.r]);
+  const MIN = state.m0, MAX = state.m1;
+  const gapAt = m => GAP[Math.round(m)];
   const y = d3.scaleLinear().domain([0, pct ? 1 : d3.max(series.at(-1), d => d[1]) * 1.04]).nice().range([H - M.b, M.t]);
   const color = k => k === "Autres" ? OTHER : pc(k);
   const svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Temps de parole par formation et par mois");
   svg.append("g").attr("class", "axis").attr("transform", `translate(${M.l},0)`)
     .call(d3.axisLeft(y).ticks(5).tickSize(-(W - M.l - M.r)).tickFormat(v => pct ? Math.round(v * 100) + " %" : v + " h"));
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - M.b})`)
-    .call(d3.axisBottom(x).tickValues(d3.range(NM).filter(i => (W - M.l) / NM >= 46 || i % 3 === 0)).tickSize(0).tickPadding(8)
-      .tickFormat(i => D.months[i] === "Jan" || i === 0 ? ml(i) : D.months[i]));
-  const area = d3.area().x(d => x(d.data.m)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
+    .call(d3.axisBottom(x).tickValues(span > 36
+        ? d3.range(MIN, MAX + 1).filter(i => D.months[i] === "Jan" && (W - M.l) / (span / 12) >= 34)
+        : d3.range(MIN, MAX + 1).filter(i => (W - M.l) / span >= 46 || (i - MIN) % Math.ceil(46 / ((W - M.l) / span)) === 0))
+      .tickSize(0).tickPadding(8)
+      .tickFormat(i => span > 36 ? String(D.years[i]) : (D.months[i] === "Jan" || i === MIN ? ml(i) : D.months[i])));
+  const area = d3.area().defined(d => !gapAt(d.data.m)).x(d => x(d.data.m)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
   svg.append("g").selectAll("path").data(series).join("path")
     .attr("fill", d => color(d.key)).attr("stroke", "var(--surface)").attr("stroke-width", 1)
     .attr("opacity", d => state.focusParty && state.focusParty !== d.key ? .12 : .92)
     .attr("d", area).style("cursor", "pointer")
     .on("click", (e, d) => { state.focusParty = state.focusParty === d.key ? null : d.key; renderStream(); });
-  // Zone hors période
-  if (state.m0 > 0) svg.append("rect").attr("x", M.l).attr("y", M.t).attr("width", x(state.m0) - M.l).attr("height", H - M.b - M.t).attr("fill", "var(--surface)").attr("opacity", .7);
-  if (state.m1 < LAST) svg.append("rect").attr("x", x(state.m1)).attr("y", M.t).attr("width", W - M.r - x(state.m1)).attr("height", H - M.b - M.t).attr("fill", "var(--surface)").attr("opacity", .7);
+  // Mois sans relevé publié (PDF seulement, ou rien) : bandes hachurées
+  const defs = svg.append("defs");
+  defs.append("pattern").attr("id", "hatch").attr("width", 6).attr("height", 6).attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)")
+    .append("line").attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 6).attr("stroke", "var(--muted)").attr("stroke-width", 1).attr("opacity", .5);
+  for (let m = MIN; m <= MAX; m++) {
+    if (!GAP[m] || (m > MIN && GAP[m - 1])) continue;
+    let e = m; while (e + 1 <= MAX && GAP[e + 1]) e++;
+    const xa = x(Math.max(MIN, m - 1)), xb = x(Math.min(MAX, e + 1));
+    svg.append("rect").attr("x", xa).attr("y", M.t).attr("width", Math.max(2, xb - xa)).attr("height", H - M.t - M.b).attr("fill", "url(#hatch)").style("pointer-events", "none");
+    if (xb - xa > 60) svg.append("text").attr("x", (xa + xb) / 2).attr("y", H - M.b - 10).attr("text-anchor", "middle")
+      .style("font-size", "10.5px").style("fill", "var(--muted)").style("pointer-events", "none").text("pas de relevé exploitable");
+  }
   // Étiquettes directes pour les 4 plus grosses couches (au milieu de la période)
-  const mid = Math.round((state.m0 + state.m1) / 2);
+  let mid = Math.round((state.m0 + state.m1) / 2); while (mid < state.m1 && GAP[mid]) mid++;
+  const midIdx = span === 1 ? 0 : mid - state.m0;
   series.slice(0, 4).forEach(s => {
     if (state.focusParty && state.focusParty !== s.key) return;
-    const d = s[mid], h = y(d[0]) - y(d[1]);
-    if (h > 16) svg.append("text").attr("x", x(mid)).attr("y", (y(d[0]) + y(d[1])) / 2).attr("dy", ".35em").attr("text-anchor", "middle")
+    const d = s[midIdx], h = y(d[0]) - y(d[1]);
+    if (h > 16) svg.append("text").attr("x", x(span === 1 ? state.m0 : mid)).attr("y", (y(d[0]) + y(d[1])) / 2).attr("dy", ".35em").attr("text-anchor", "middle")
       .style("font-size", "11.5px").style("font-weight", 600).style("fill", "#fff").style("pointer-events", "none").text(short(s.key));
   });
   // Périodes de campagne électorale
@@ -704,7 +738,8 @@ function renderStream() {
     const [y, mo, d] = iso.split("-").map(Number); const days = new Date(y, mo, 0).getDate();
     return x(Math.max(0, Math.min(LAST, i - .5 + (d - 1) / days))); };
   (D.elections || []).forEach(e => {
-    const x0 = xDate(e.start), x1 = xDate(e.end); if (x0 == null || x1 == null) return;
+    let x0 = xDate(e.start), x1 = xDate(e.end); if (x0 == null || x1 == null) return;
+    x0 = Math.max(M.l, x0); x1 = Math.min(W - M.r, x1); if (x1 - x0 < 1) return;
     const g = svg.append("g").style("pointer-events", "none");
     g.append("rect").attr("x", x0).attr("y", M.t).attr("width", Math.max(2, x1 - x0)).attr("height", H - M.t - M.b)
       .attr("fill", "var(--accent)").attr("opacity", .1);
@@ -716,7 +751,7 @@ function renderStream() {
       .style("font-size", "10.5px").style("fill", "var(--accent)").text(e.name.toLowerCase());
   });
   // Repères de changement d'année
-  D.years.forEach((yv, i) => { if (i > 0 && yv !== D.years[i - 1]) {
+  if (span <= 36) D.years.forEach((yv, i) => { if (i > MIN && i <= MAX && yv !== D.years[i - 1]) {
     svg.append("line").attr("x1", x(i)).attr("x2", x(i)).attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--text)").attr("stroke-width", 1).attr("stroke-dasharray", "3 4").attr("opacity", .45).style("pointer-events", "none");
     svg.append("text").attr("x", x(i) + 6).attr("y", M.t + 12).style("font-size", "11px").style("font-weight", 600).style("fill", "var(--text-2)").style("pointer-events", "none").text(yv);
   } });
@@ -724,18 +759,20 @@ function renderStream() {
   const cross = svg.append("line").attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--text)").attr("stroke-width", 1).attr("opacity", 0).style("pointer-events", "none");
   svg.append("rect").attr("x", M.l).attr("y", M.t).attr("width", W - M.l - M.r).attr("height", H - M.t - M.b).attr("fill", "transparent")
     .on("pointermove", e => {
-      const [mx] = d3.pointer(e); const m = Math.max(0, Math.min(LAST, Math.round(x.invert(mx))));
+      const [mx] = d3.pointer(e); const m = Math.max(MIN, Math.min(MAX, Math.round(x.invert(mx))));
       cross.attr("x1", x(m)).attr("x2", x(m)).attr("opacity", .5);
       const r = rows[m], tot = d3.sum(keys, k => r[k]);
       showTip(e, t => {
-        t.append(el("div", "t", MONTHS_FULL[m] + " · " + fmtH(tot)));
+        t.append(el("div", "t", MONTHS_FULL[m] + " · " + (GAP[m] ? "aucun relevé exploitable" : fmtH(tot))));
+        if (GAP[m]) return;
         [...keys].reverse().forEach(k => tipRow(t, color(k), short(k), pct ? fmtPct(r[k] / (tot || 1)) : fmtH(r[k])));
       });
     })
     .on("pointerleave", () => { cross.attr("opacity", 0); hideTip(); })
     .on("click", e => {
-      const [mx, my] = d3.pointer(e); const m = Math.max(0, Math.min(LAST, Math.round(x.invert(mx)))); const v = y.invert(my);
-      const s = series.find(s => s[m][0] <= v && v <= s[m][1]); if (s) { state.focusParty = state.focusParty === s.key ? null : s.key; renderStream(); }
+      const [mx, my] = d3.pointer(e); const m = Math.max(MIN, Math.min(MAX, Math.round(x.invert(mx)))); const v = y.invert(my);
+      const k = span === 1 ? 0 : m - MIN;
+      const s = series.find(s => s[k][0] <= v && v <= s[k][1]); if (s) { state.focusParty = state.focusParty === s.key ? null : s.key; renderStream(); }
     });
   // Légende
   const lg = document.getElementById("streamLegend"); lg.replaceChildren();
@@ -867,10 +904,10 @@ function renderTable() {
 function sparkline(arr, color) {
   const w = 114, h = 22, m = d3.max(arr) || 1, ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg"); svg.setAttribute("width", w); svg.setAttribute("height", h);
-  const bw = w / NM;
-  arr.forEach((v, i) => {
+  const bw = w / (NM - PS);
+  arr.slice(PS).forEach((v, k) => { const i = k + PS;
     const r = document.createElementNS(ns, "rect"), bh = Math.max(v > 0 ? 1.5 : 0, v / m * (h - 2));
-    r.setAttribute("x", i * bw + 1); r.setAttribute("width", bw - 2); r.setAttribute("y", h - bh); r.setAttribute("height", bh); r.setAttribute("rx", 1.5);
+    r.setAttribute("x", k * bw + 1); r.setAttribute("width", bw - 2); r.setAttribute("y", h - bh); r.setAttribute("height", bh); r.setAttribute("rx", 1.5);
     r.setAttribute("fill", color); r.setAttribute("opacity", i >= state.m0 && i <= state.m1 ? 1 : .25); svg.append(r);
   });
   return svg;
@@ -894,13 +931,18 @@ function update() {
   m0.value = state.m0; m1.value = state.m1; syncPresets();
   if (state.raceMonth < state.m0 || state.raceMonth > state.m1) state.raceMonth = state.m1;
   renderCandNote();
+  const pn = document.getElementById("personNote");
+  pn.style.display = state.m0 < PS ? "block" : "none";
+  pn.textContent = state.m1 < PS
+    ? `Avant ${MONTHS_FULL[PS].toLowerCase()}, l'Arcom ne publie que des relevés par parti : pas de classement par personnalité sur cette période. Les graphiques par formation, plus bas, remontent jusqu'en ${MONTHS_FULL[0].toLowerCase()}.`
+    : `Relevés par personnalité disponibles depuis ${MONTHS_FULL[PS].toLowerCase()} seulement : la course, les fiches et le classement couvrent ${MONTHS_FULL[Math.max(PS, state.m0)].toLowerCase()} – ${MONTHS_FULL[state.m1].toLowerCase()}.`;
   document.getElementById("raceSub").textContent = (state.candOnly ? "Les 12 candidats 2027 les plus entendus" : "Les 12 personnalités les plus entendues") + " · cliquez une barre pour voir la fiche";
   renderKPIs(); renderRace(); renderPerson(); renderStream(); renderHeat(); renderTable();
 }
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; heat.key = null; update(); }, 150); });
 update();
 // Petite intro : la course démarre seule au chargement
-state.raceMonth = state.m0; renderRace(false); setTimeout(() => playBtn.click(), 600);
+state.raceMonth = Math.max(state.m0, PS); renderRace(false); setTimeout(() => playBtn.click(), 600);
 </script>
 </body>
 </html>

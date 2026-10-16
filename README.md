@@ -14,12 +14,20 @@ Visualisation interactive du temps de parole des personnalités politiques sur 2
 site/            page publiée (index.html + data.js généré)
 scripts/
   fetch_arcom.py      relevés mensuels hors périodes électorales → data/raw/
+  fetch_history.py    historique par parti 2012-2024 (à lancer une fois) → data/raw/history.csv
+  history_logos.json  logos de chaînes reconnus dans les vieux fichiers
   fetch_elections.py  relevés de campagne (scrutins en cours ou récents) → data/raw/elections/
   build_data.py       fusionne le tout → site/data.js
 data/raw/        CSV bruts Arcom, un fichier par mois et par type
 data/raw/elections/  un CSV par scrutin (périodes cumulées par chaîne)
 .github/workflows/update.yml
 ```
+
+## Historique 2012-2024
+
+Avant 2025, l'Arcom (ex-CSA) ne publie que des relevés **par parti**, un fichier par type de média, type d'émission et mois, en Excel (.xls, 2012-2021), OpenDocument (.odt, 2021) ou Word (.docx, 2022-2024). Dans les fichiers .xls et .odt, les en-têtes de chaînes sont des **logos** : `fetch_history.py` extrait chaque image et la reconnaît grâce à `scripts/history_logos.json` (empreinte → chaîne, établie une fois à la main). Le résultat, `data/raw/history.csv`, est versionné ; les fichiers sources restent dans `data/cache/` (non versionné).
+
+Les relevés historiques ne changent plus : le script se lance à la main, une fois (`pip install xlrd` puis `python3 scripts/fetch_history.py`). Trous connus : 2014 – août 2015 (PDF seulement) et février – juin 2017 (aucun relevé). Les anciens noms de partis et de chaînes sont regroupés avec le nom actuel (UMP → LR, FN → RN, LREM → Renaissance, EELV → Les Écologistes, i>Télé → CNews, D8 → C8, NT1 → TFX…), voir `PARTY_LINEAGE` dans `build_data.py`.
 
 ## Périodes électorales
 
