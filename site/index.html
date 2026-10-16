@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temps de parole politique</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="data.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f1;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --line: #e4e2dc;
+  --grid: #ebe9e4;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #8a8984;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+  --seq-0: #eef4fc; --seq-1: #9ec5f4; --seq-2: #3987e5; --seq-3: #184f95; --seq-4: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --surface-2: #242422; --line: #2e2e2b; --grid: #2a2a27;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8d8c85; --accent: #3987e5; --accent-ink: #fff;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    --seq-0: #1f2630; --seq-1: #1c5cab; --seq-2: #3987e5; --seq-3: #86b6ef; --seq-4: #cde2fb;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --surface-2: #242422; --line: #2e2e2b; --grid: #2a2a27;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #8d8c85; --accent: #3987e5; --accent-ink: #fff;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  --seq-0: #1f2630; --seq-1: #1c5cab; --seq-2: #3987e5; --seq-3: #86b6ef; --seq-4: #cde2fb;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 Inter, system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 32px 24px 64px; }
+header.hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: clamp(30px, 5vw, 50px); line-height: 1.05; margin: 6px 0 10px; letter-spacing: -.02em; text-wrap: balance; }
+.lede { color: var(--text-2); max-width: 680px; margin: 0; font-size: 15px; }
+h2 { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+button { font: inherit; color: inherit; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; width: 40px; height: 40px; cursor: pointer; display: grid; place-items: center; flex: none; }
+.icon-btn:hover { background: var(--surface-2); }
+
+/* Filtres */
+.filters { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  padding: 12px 16px; margin: 0 -16px 20px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.fgroup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.flabel { font-size: 12px; color: var(--muted); font-weight: 500; margin-right: 2px; }
+select, input[type=search] { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.chip { border: 1px solid var(--line); background: var(--surface); padding: 5px 11px; border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--text-2); transition: all .15s; }
+.chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.chip:hover { border-color: var(--text-2); }
+.chip.cand[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.badge { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 6px; border-radius: 999px; margin-left: 6px; vertical-align: 1px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; }
+.badge.pot { background: var(--surface-2); color: var(--text-2); }
+.cand-note { display: none; font-size: 12.5px; color: var(--text-2); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 10px 14px; margin: -6px 0 18px; }
+.cand-note.on { display: block; }
+.reset { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 500; padding: 4px; }
+
+/* KPI */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.kpi .k { font-size: 12px; color: var(--muted); font-weight: 500; }
+.kpi .v { font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 700; line-height: 1.1; margin-top: 4px; letter-spacing: -.02em; }
+.kpi .d { font-size: 12.5px; color: var(--text-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); min-width: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; margin-bottom: 20px; }
+.stack { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; }
+.seg button { border: none; background: none; padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }
+
+/* Course */
+.race-ctrl { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.play { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--accent); color: var(--accent-ink); cursor: pointer; display: grid; place-items: center; flex: none; }
+.play:hover { filter: brightness(1.08); }
+input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.race-month { font-family: Fraunces, Georgia, serif; font-size: 20px; font-weight: 700; min-width: 92px; text-align: right; }
+svg text { fill: var(--text); }
+.axis text { fill: var(--muted); font-size: 11px; }
+.axis path, .axis line { stroke: var(--grid); }
+.axis .domain { display: none; }
+.bar-row { cursor: pointer; }
+.bar-row:hover rect.bar { filter: brightness(1.12); }
+.bar-row.sel rect.bar { stroke: var(--text); stroke-width: 1.5px; }
+
+/* Légende */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 10px; }
+.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); border: none; background: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.lg:hover { background: var(--surface-2); }
+.lg.dim { opacity: .35; }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+/* Fiche perso */
+.person-top { display: flex; gap: 14px; align-items: center; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 17px; color: #fff; flex: none; }
+.pname { font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 700; line-height: 1.15; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.pstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 6px; }
+.pstat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.pstat .v { font-weight: 700; font-size: 18px; }
+.pstat .k { font-size: 11.5px; color: var(--muted); }
+.mini-h { font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
+.search-wrap { position: relative; }
+.search-wrap input { width: 100%; }
+.sugg { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); max-height: 260px; overflow: auto; z-index: 30; display: none; }
+.sugg button { display: flex; width: 100%; justify-content: space-between; gap: 10px; padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 13px; }
+.sugg button:hover, .sugg button:focus { background: var(--surface-2); outline: none; }
+.sugg .m { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* Heatmap */
+.hm-scroll { overflow-x: auto; }
+.cell { cursor: pointer; }
+.cell:hover rect { stroke: var(--text); stroke-width: 1.5px; }
+.colhead { cursor: pointer; }
+.colhead:hover text { fill: var(--accent); }
+.hm-scale { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.hm-grad { width: 160px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--seq-0), var(--seq-1), var(--seq-2), var(--seq-3), var(--seq-4)); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; }
+th.num, td.num { text-align: right; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--surface-2); }
+.rank { color: var(--muted); width: 36px; }
+.table-scroll { overflow-x: auto; }
+.more { margin-top: 12px; border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+
+/* Tooltip */
+.tip { position: fixed; pointer-events: none; z-index: 100; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 10px 12px; font-size: 12.5px; min-width: 160px; max-width: 280px; opacity: 0; transition: opacity .12s; }
+.tip .t { font-weight: 600; margin-bottom: 6px; color: var(--text-2); font-size: 12px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 1px 0; }
+.tip .r .n { display: flex; align-items: center; gap: 6px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tip .r b { color: var(--text); }
+.tip .key { width: 12px; height: 2.5px; border-radius: 2px; flex: none; }
+.tip .big { font-size: 18px; font-weight: 700; color: var(--text); }
+
+footer { color: var(--muted); font-size: 12.5px; margin-top: 28px; line-height: 1.6; }
+footer a { color: var(--accent); }
+
+@media (max-width: 900px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 20px 16px 48px; }
+  .filters { margin: 0 -16px 16px; padding: 10px 16px; position: static; }
+  .card { padding: 16px; }
+  .kpi .v { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Arcom · Pluralisme politique · 2025–2026</div>
+      <h1>Qui parle à la télé et à la radio&nbsp;?</h1>
+      <p class="lede">Le temps de parole des personnalités politiques, mois par mois, sur 25 chaînes et radios nationales, <span id="span"></span>. Choisissez une période, un type de média ou une chaîne&nbsp;: tous les graphiques se mettent à jour.</p>
+    </div>
+    <button class="icon-btn" id="theme" title="Changer de thème" aria-label="Changer de thème">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </header>
+
+  <div class="filters" role="toolbar" aria-label="Filtres">
+    <div class="fgroup"><span class="flabel">Période</span>
+      <select id="m0" aria-label="Mois de début"></select><span class="flabel">→</span><select id="m1" aria-label="Mois de fin"></select>
+      <span id="presets" class="fgroup"></span>
+    </div>
+    <div class="fgroup" id="svc"><span class="flabel">Média</span></div>
+    <div class="fgroup"><span class="flabel">Chaîne</span><select id="chan" aria-label="Chaîne"></select></div>
+    <div class="fgroup" id="ptype"><span class="flabel">Émissions</span></div>
+    <button class="chip cand" id="cand" aria-pressed="false" title="Candidats déclarés ou pressentis pour la présidentielle 2027">★ Candidats 2027</button>
+    <button class="reset" id="reset">Réinitialiser</button>
+  </div>
+  <div class="cand-note" id="candNote"></div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>La course au temps d'antenne</h2><p class="sub" id="raceSub">Les 12 personnalités les plus entendues · cliquez une barre pour voir la fiche</p></div>
+        <div class="seg" id="raceMode"><button data-v="cumul" aria-pressed="true">Cumulé</button><button data-v="month" aria-pressed="false">Par mois</button></div>
+      </div>
+      <div id="race"></div>
+      <div class="race-ctrl">
+        <button class="play" id="play" aria-label="Lecture"></button>
+        <input type="range" id="raceSlider" min="0" max="18" step="1" aria-label="Mois">
+        <div class="race-month" id="raceLabel"></div>
+      </div>
+    </div>
+    <div class="card" id="personCard">
+      <div class="search-wrap">
+        <input type="search" id="search" placeholder="Rechercher une personnalité…" autocomplete="off" aria-label="Rechercher une personnalité">
+        <div class="sugg" id="sugg"></div>
+      </div>
+      <div id="person" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Le paysage politique mois après mois</h2><p class="sub">Temps de parole par formation (exécutif inclus) · cliquez la légende pour isoler un parti</p></div>
+        <div class="seg" id="streamMode"><button data-v="abs" aria-pressed="true">Heures</button><button data-v="pct" aria-pressed="false">Part en %</button></div>
+      </div>
+      <div id="stream"></div>
+      <div class="legend" id="streamLegend"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Chaque chaîne, son équilibre</h2><p class="sub">Part de chaque formation dans le temps politique de la chaîne · cliquez une chaîne pour filtrer</p></div>
+      </div>
+      <div class="hm-scroll"><div id="heat"></div></div>
+      <div class="hm-scale"><span>0&nbsp;%</span><div class="hm-grad"></div><span id="hmMax"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Classement complet</h2><p class="sub" id="tableSub"></p></div>
+        <input type="search" id="tableSearch" placeholder="Filtrer par nom ou parti…" aria-label="Filtrer le tableau">
+      </div>
+      <div class="table-scroll"><table id="table"><thead></thead><tbody></tbody></table></div>
+      <button class="more" id="more">Afficher plus</button>
+    </div>
+  </div>
+
+  <footer>
+    Source&nbsp;: Arcom, <a href="https://www.data.gouv.fr/fr/datasets/temps-de-parole-des-partis-et-personnalites-politiques-elections-municipales-2026/" target="_blank" rel="noopener">temps de parole des partis et personnalités politiques</a> (data.gouv.fr), et <a href="https://www.arcom.fr/temps-parole/hors-elections" target="_blank" rel="noopener">relevés hors périodes électorales</a> publiés par l'Arcom (2026), mensuels, <span id="span2"></span>.
+    JT = journaux télévisés et radio, Magazines = magazines d'information, Autres = autres programmes.
+    Les personnalités sont rattachées à leur formation principale&nbsp;; les membres du gouvernement sans étiquette apparaissent sous «&nbsp;Gouvernement&nbsp;».
+    Le graphique par formation et la heatmap utilisent les relevés « partis », qui comptent l'exécutif (Président, Gouvernement) à part.
+  </footer>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const D = window.TP_DATA;
+const MONTHS_FULL = D.monthsFull, NM = D.months.length, LAST = NM - 1;
+const ml = i => D.months[i] + " " + String(D.years[i]).slice(2); // « Jan 26 »
+const YEARS = [...new Set(D.years)];
+document.getElementById("span").textContent = document.getElementById("span2").textContent = `de ${MONTHS_FULL[0].toLowerCase()} à ${MONTHS_FULL[LAST].toLowerCase()}`;
+const TYPES = ["JT", "Magazines", "Autres"];
+const SVC = [["Chaîne généraliste","TV généralistes"],["Chaîne d'information","Info continue"],["Radio","Radios"]];
+const CH_NAMES = D.channels.map(c => c.n === "franceinfo:" ? "franceinfo TV" : c.n === "France Info" ? "France Info radio" : c.n === "RMC Decouverte" ? "RMC Découverte" : c.n);
+
+// Couleurs politiques usuelles, ajustées pour rester lisibles dans les deux thèmes
+const PARTY_COLORS = {
+  "Rassemblement national": "#2c4a9a", "Union des droites pour la République": "#7486c9", "Reconquête": "#6b4f8f",
+  "Les amis d'Eric Zemmour": "#6b4f8f", "Debout la France": "#5a6b8c", "Les Patriotes": "#5a6b8c",
+  "Les Républicains": "#3c8fd6", "Divers Droite": "#86b0e0", "Union des démocrates et indépendants": "#6fcfbd",
+  "Les Centristes": "#7fc4c4", "Horizons": "#1ba5b3", "Renaissance": "#f2b100", "Mouvement démocrate": "#ee7d22",
+  "Divers Centre": "#f6c96b", "Parti radical": "#e9a960", "Agir": "#d9a03f",
+  "Parti socialiste": "#e8579a", "Place publique": "#b5307a", "Divers Gauche": "#f2a4c6", "Parti radical de gauche": "#e78fb0",
+  "La France insoumise": "#d4232b", "Parti communiste français": "#9e1b21", "Lutte Ouvrière": "#8e1a1a", "Nouveau parti anticapitaliste": "#a83232",
+  "Les Ecologistes": "#2fa84f", "Génération Ecologie": "#66b84a", "Génération.s": "#c45ea0",
+  "Gouvernement": "#8a8f9e", "Président de la République": "#b08d57", "Sans étiquette": "#a9a79e", "Divers": "#c9b48f", "Identité-Libertés": "#4a3f73", "La France humaniste": "#8d6e9e",
+  "Debout !": "#e06c4f", "La Convention": "#d98fa0", "Les Patriotes": "#5a6b8c",
+};
+const OTHER = "#d3d1c8";
+const pc = p => PARTY_COLORS[p] || OTHER;
+const SHORT = { "Rassemblement national": "RN", "La France insoumise": "LFI", "Les Républicains": "LR", "Parti socialiste": "PS",
+  "Mouvement démocrate": "MoDem", "Parti communiste français": "PCF", "Union des démocrates et indépendants": "UDI",
+  "Union des droites pour la République": "UDR", "Président de la République": "Président", "Les Ecologistes": "Écologistes",
+  "Divers Droite": "Div. droite", "Divers Gauche": "Div. gauche", "Divers Centre": "Div. centre" };
+const short = p => SHORT[p] || p;
+
+// Présidentielle 2027 : candidats déclarés ou pressentis (état à mi-octobre 2026, à ajuster si besoin)
+const CANDIDATES = [
+  ["LE PEN MARINE", "pressentie", "RN, selon la décision d'appel"], ["BARDELLA JORDAN", "pressenti", "RN, si Marine Le Pen est inéligible"],
+  ["PHILIPPE EDOUARD", "déclaré"], ["ATTAL GABRIEL", "déclaré"], ["RETAILLEAU BRUNO", "déclaré", "désigné par LR"],
+  ["ZEMMOUR ERIC", "déclaré"], ["BERTRAND XAVIER", "déclaré"], ["LISNARD DAVID", "déclaré"], ["DUPONT AIGNAN NICOLAS", "déclaré"],
+  ["MELENCHON JEAN LUC", "pressenti", "pas encore officiellement déclaré"], ["GLUCKSMANN RAPHAEL", "déclaré"], ["ROUSSEL FABIEN", "déclaré"],
+  ["RUFFIN FRANCOIS", "déclaré"], ["TONDELIER MARINE", "déclarée"], ["BATHO DELPHINE", "déclarée"], ["BOUAMRANE KARIM", "déclaré"],
+  ["CAZENEUVE BERNARD", "déclaré"], ["ARTHAUD NATHALIE", "déclarée"], ["PHILIPPOT FLORIAN", "déclaré"], ["ASSELINEAU FRANCOIS", "déclaré"],
+  ["DE VILLEPIN DOMINIQUE", "pressenti"], ["KAZIB ANASSE", "déclaré"], ["LABIB SELMA", "déclarée"], ["BRANCO JUAN", "déclaré"],
+];
+const keyOf = n => n.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/-/g, " ").split(/\s+/).filter(Boolean).join(" ");
+const CAND = new Map(); // index personnalité -> [statut, note]
+const peopleKey = new Map(D.people.map((p, i) => [keyOf(p[0]), i]));
+const CAND_MISSING = [];
+CANDIDATES.forEach(([k, st, note]) => { const i = peopleKey.get(k); if (i != null) CAND.set(i, [st, note]); else CAND_MISSING.push(k); });
+const candBadge = i => { const c = CAND.get(i); if (!c) return null; const b = el("span", "badge" + (c[0].startsWith("press") ? " pot" : ""), "2027 · " + c[0]); if (c[1]) b.title = c[1]; return b; };
+
+const fmtH = s => {
+  if (s < 60) return s + " s";
+  if (s < 3600) return Math.round(s / 60) + " min";
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h >= 100 ? d3.format(",")(h).replace(/,/g, " ") + " h" : (m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`);
+};
+const fmtPct = v => (v * 100).toLocaleString("fr-FR", { maximumFractionDigits: v < 0.1 ? 1 : 0 }) + " %";
+const initials = n => { const parts = n.split(/\s+/); const last = parts[0] || ""; const first = parts.slice(1).join(" "); return ((first[0] || "") + (last[0] || "")).toUpperCase(); };
+const prettyName = n => { // « NOM Prénom » → « Prénom Nom »
+  const parts = n.split(/\s+/); const isUp = w => w === w.toUpperCase() && /[A-ZÀ-Ý]/.test(w);
+  const last = [], first = [];
+  parts.forEach(w => (isUp(w) && first.length === 0 ? last : first).push(w));
+  const cap = w => w.toLowerCase().replace(/(^|[-'\s])(\p{L})/gu, (a, b, c) => b + c.toUpperCase());
+  return first.length ? first.join(" ") + " " + last.map(cap).join(" ") : parts.map(cap).join(" ");
+};
+
+const state = { m0: 0, m1: LAST, svc: new Set(SVC.map(s => s[0])), chan: -1, types: new Set([0, 1, 2]),
+  raceMode: "cumul", raceMonth: LAST, candOnly: false, streamMode: "abs", focusParty: null, person: null, tableLimit: 25, sort: "total", q: "" };
+
+const chanOK = ci => state.svc.has(D.channels[ci].t) && (state.chan < 0 || state.chan === ci);
+const recOK = (r, ignorePeriod) => (ignorePeriod || (r[1] >= state.m0 && r[1] <= state.m1)) && state.types.has(r[3]) && chanOK(r[2]);
+
+const tip = document.getElementById("tip");
+function showTip(ev, build) {
+  tip.replaceChildren(); build(tip); tip.style.opacity = 1; moveTip(ev);
+}
+function moveTip(ev) {
+  const r = tip.getBoundingClientRect(); let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+const hideTip = () => tip.style.opacity = 0;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+function tipRow(parent, color, name, value) {
+  const r = el("div", "r"), n = el("span", "n");
+  if (color) { const k = el("span", "key"); k.style.background = color; n.append(k); }
+  n.append(document.createTextNode(name)); r.append(n, el("b", null, value)); parent.append(r);
+}
+
+/* ---------- Filtres ---------- */
+const m0 = document.getElementById("m0"), m1 = document.getElementById("m1"), chanSel = document.getElementById("chan");
+MONTHS_FULL.forEach((m, i) => { m0.add(new Option(m, i)); m1.add(new Option(m, i)); });
+function fillChannels() {
+  chanSel.replaceChildren(new Option("Toutes", -1));
+  SVC.forEach(([t, label]) => {
+    if (!state.svc.has(t)) return;
+    const g = document.createElement("optgroup"); g.label = label;
+    D.channels.forEach((c, i) => { if (c.t === t) g.append(new Option(CH_NAMES[i], i)); });
+    chanSel.append(g);
+  });
+  chanSel.value = state.chan;
+}
+function chips(containerId, items, isOn, toggle) {
+  const c = document.getElementById(containerId);
+  items.forEach(([v, label]) => {
+    const b = el("button", "chip", label); b.setAttribute("aria-pressed", isOn(v));
+    b.onclick = () => { toggle(v); c.querySelectorAll(".chip").forEach((x, i) => x.setAttribute("aria-pressed", isOn(items[i][0]))); update(); };
+    c.append(b);
+  });
+}
+const toggleSet = (set, v) => { if (set.has(v)) { if (set.size > 1) set.delete(v); } else set.add(v); };
+chips("svc", SVC, v => state.svc.has(v), v => { toggleSet(state.svc, v); if (state.chan >= 0 && !chanOK(state.chan)) state.chan = -1; fillChannels(); });
+chips("ptype", TYPES.map((t, i) => [i, t]), v => state.types.has(v), v => toggleSet(state.types, v));
+m0.onchange = () => { state.m0 = +m0.value; if (state.m1 < state.m0) state.m1 = state.m0; state.raceMonth = state.m1; update(); };
+m1.onchange = () => { state.m1 = +m1.value; if (state.m0 > state.m1) state.m0 = state.m1; state.raceMonth = state.m1; update(); };
+chanSel.onchange = () => { state.chan = +chanSel.value; update(); };
+document.getElementById("reset").onclick = () => {
+  Object.assign(state, { m0: 0, m1: LAST, chan: -1, raceMonth: LAST, focusParty: null });
+  state.svc = new Set(SVC.map(s => s[0])); state.types = new Set([0, 1, 2]);
+  document.querySelectorAll("#svc .chip, #ptype .chip").forEach(c => c.setAttribute("aria-pressed", true));
+  fillChannels(); update();
+};
+fillChannels();
+// Raccourcis de période
+const presetDefs = [...YEARS.map(y => [String(y), D.years.indexOf(y), D.years.lastIndexOf(y)]), ["Tout", 0, LAST]];
+const presetHost = document.getElementById("presets");
+presetDefs.forEach(([label, a, b]) => {
+  const c = el("button", "chip", label); c.dataset.a = a; c.dataset.b = b;
+  c.onclick = () => { state.m0 = a; state.m1 = b; state.raceMonth = b; update(); };
+  presetHost.append(c);
+});
+const candBtn = document.getElementById("cand"), candNote = document.getElementById("candNote");
+candBtn.onclick = () => {
+  state.candOnly = !state.candOnly; candBtn.setAttribute("aria-pressed", state.candOnly);
+  if (state.candOnly && !CAND.has(state.person)) state.person = null;
+  update();
+};
+function renderCandNote() {
+  candNote.classList.toggle("on", state.candOnly);
+  if (!state.candOnly) return;
+  const missing = CAND_MISSING.map(k => prettyName(k.split(" ").map((w, i) => i ? w[0] + w.slice(1).toLowerCase() : w).join(" ")));
+  candNote.textContent = `Classement, course et chiffres clés limités aux ${CAND.size} candidats déclarés ou pressentis pour 2027 présents dans les relevés`
+    + (missing.length ? ` (aucun temps relevé pour ${missing.join(", ")})` : "")
+    + ". Les graphiques par formation restent calculés sur l'ensemble des personnalités.";
+}
+const syncPresets = () => presetHost.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", +c.dataset.a === state.m0 && +c.dataset.b === state.m1));
+
+/* ---------- Agrégats ---------- */
+function personTotals(mFrom, mTo) {
+  const t = new Float64Array(D.people.length);
+  for (const r of D.P) if (r[1] >= mFrom && r[1] <= mTo && state.types.has(r[3]) && chanOK(r[2]) && (!state.candOnly || CAND.has(r[0]))) t[r[0]] += r[4];
+  return t;
+}
+
+/* ---------- KPI ---------- */
+function renderKPIs() {
+  const tp = personTotals(state.m0, state.m1);
+  let total = 0, n = 0, best = -1;
+  tp.forEach((v, i) => { if (v > 0) { total += v; n++; if (best < 0 || v > tp[best]) best = i; } });
+  const party = new Map();
+  for (const r of D.G) if (recOK(r)) party.set(r[0], (party.get(r[0]) || 0) + r[4]);
+  const topParty = [...party].filter(([p]) => D.parties[p] !== "Gouvernement" && D.parties[p] !== "Président de la République").sort((a, b) => b[1] - a[1])[0];
+  const partyTotal = d3.sum([...party.values()]);
+  const chans = new Map();
+  for (const r of D.P) if (recOK(r)) chans.set(r[2], (chans.get(r[2]) || 0) + r[4]);
+  const topChan = [...chans].sort((a, b) => b[1] - a[1])[0];
+  const items = [
+    ["Temps de parole total", fmtH(total), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes`],
+    [state.candOnly ? "Candidats 2027 entendus" : "Personnalités entendues", n.toLocaleString("fr-FR"), state.candOnly ? `sur ${CANDIDATES.length} déclarés ou pressentis` : "au moins une seconde d'antenne"],
+    [state.candOnly ? "Candidat n°1" : "Personnalité n°1", best >= 0 ? prettyName(D.people[best][0]) : "—", best >= 0 ? `${fmtH(tp[best])} · ${short(D.people[best][1])}` : ""],
+    ["Formation n°1 (hors exécutif)", topParty ? short(D.parties[topParty[0]]) : "—", topParty ? `${fmtPct(topParty[1] / partyTotal)} du temps · ${topChan ? CH_NAMES[topChan[0]] + " la plus bavarde" : ""}` : ""],
+  ];
+  const c = document.getElementById("kpis"); c.replaceChildren();
+  items.forEach(([k, v, d]) => { const b = el("div", "kpi"); b.append(el("div", "k", k), el("div", "v", v), el("div", "d", d)); c.append(b); });
+}
+
+/* ---------- Course ---------- */
+const race = { svg: null, w: 0 };
+const N_RACE = 12;
+function raceData() {
+  const m = state.raceMonth;
+  const tp = state.raceMode === "cumul" ? personTotals(state.m0, m) : personTotals(m, m);
+  const idx = [];
+  tp.forEach((v, i) => { if (v > 0) idx.push(i); });
+  idx.sort((a, b) => tp[b] - tp[a]);
+  return idx.slice(0, N_RACE).map((i, rank) => ({ id: i, v: tp[i], rank }));
+}
+function renderRace(animate = true) {
+  const host = document.getElementById("race");
+  const W = host.clientWidth, rowH = 34, H = N_RACE * rowH + 24, M = { l: 4, r: 70, t: 22 };
+  if (!race.svg || race.w !== W) {
+    host.replaceChildren(); race.w = W;
+    race.svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Classement animé des personnalités");
+    race.gx = race.svg.append("g").attr("class", "axis").attr("transform", `translate(0,${M.t - 4})`);
+    race.g = race.svg.append("g");
+    race.bg = race.svg.append("text").attr("x", W - 10).attr("y", H - 10).attr("text-anchor", "end")
+      .style("font", "700 54px Fraunces, Georgia, serif").style("fill", "var(--text)").style("opacity", .07);
+  }
+  const data = raceData();
+  const x = d3.scaleLinear().domain([0, d3.max(data, d => d.v) || 1]).range([M.l, W - M.r]);
+  const y = r => M.t + r * rowH;
+  const t = race.svg.transition().duration(animate ? 650 : 0).ease(d3.easeCubicInOut);
+  race.gx.transition(t).call(d3.axisTop(x).ticks(W > 500 ? 5 : 3).tickSize(-(N_RACE * rowH)).tickFormat(v => v === 0 ? "" : fmtH(v)));
+  race.gx.selectAll(".tick line").attr("stroke", "var(--grid)");
+  race.bg.text(state.raceMode === "cumul" && state.raceMonth !== state.m0 ? `${ml(state.m0)} – ${ml(state.raceMonth)}` : MONTHS_FULL[state.raceMonth]);
+
+  const rows = race.g.selectAll("g.bar-row").data(data, d => d.id);
+  const enter = rows.enter().append("g").attr("class", "bar-row").attr("tabindex", 0)
+    .attr("transform", `translate(0,${y(N_RACE)})`).style("opacity", 0);
+  enter.append("rect").attr("class", "bar").attr("x", x(0)).attr("height", rowH - 8).attr("rx", 4).attr("width", 0);
+  enter.append("text").attr("class", "nm").attr("y", (rowH - 8) / 2).attr("dy", ".35em").style("font-weight", 600).style("font-size", "12.5px");
+  enter.append("text").attr("class", "val").attr("y", (rowH - 8) / 2).attr("dy", ".35em").style("font-size", "12px").style("fill", "var(--text-2)");
+  enter.on("click", (e, d) => selectPerson(d.id))
+    .on("keydown", (e, d) => { if (e.key === "Enter") selectPerson(d.id); })
+    .on("pointermove", (e, d) => showTip(e, t => { const p = D.people[d.id]; t.append(el("div", "t", short(p[1]))); t.append(el("div", "big", fmtH(d.v))); t.append(el("div", null, prettyName(p[0]))); }))
+    .on("pointerleave", hideTip);
+  const all = enter.merge(rows);
+  all.classed("sel", d => d.id === state.person);
+  all.transition(t).attr("transform", d => `translate(0,${y(d.rank)})`).style("opacity", 1);
+  all.select("rect").attr("fill", d => pc(D.people[d.id][1])).transition(t).attr("width", d => Math.max(2, x(d.v) - x(0)));
+  all.each(function (d) {
+    const g = d3.select(this), bw = x(d.v) - x(0), name = prettyName(D.people[d.id][0]);
+    const nm = g.select("text.nm"), val = g.select("text.val").text(fmtH(d.v));
+    const full = name + (W > 520 ? "  ·  " + short(D.people[d.id][1]) : "");
+    const fullW = nm.text(full).node().getComputedTextLength();
+    const inside = bw > fullW + 20;
+    const label = inside ? full : name;
+    const lw = inside ? fullW : nm.text(name).node().getComputedTextLength();
+    nm.text(label).transition(t).attr("x", inside ? x(0) + 10 : x(d.v) + 8).style("fill", inside ? "#fff" : "var(--text)");
+    const vw = val.node().getComputedTextLength();
+    let vx = inside ? x(d.v) + 8 : x(d.v) + 8 + lw + 10;
+    const fits = vx + vw <= W - 2;
+    val.transition(t).attr("x", fits ? vx : W - 2).attr("text-anchor", fits ? "start" : "end").style("opacity", fits || inside ? 1 : 0);
+  });
+  rows.exit().transition(t).attr("transform", `translate(0,${y(N_RACE + 1)})`).style("opacity", 0).remove();
+
+  document.getElementById("raceLabel").textContent = MONTHS_FULL[state.raceMonth];
+  const sl = document.getElementById("raceSlider"); sl.min = state.m0; sl.max = state.m1; sl.value = state.raceMonth;
+}
+const PLAY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
+const PAUSE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+let timer = null;
+const playBtn = document.getElementById("play"); playBtn.innerHTML = PLAY_ICON;
+function stop() { clearInterval(timer); timer = null; playBtn.innerHTML = PLAY_ICON; playBtn.setAttribute("aria-label", "Lecture"); }
+playBtn.onclick = () => {
+  if (timer) return stop();
+  if (state.raceMonth >= state.m1) state.raceMonth = state.m0;
+  playBtn.innerHTML = PAUSE_ICON; playBtn.setAttribute("aria-label", "Pause");
+  renderRace();
+  timer = setInterval(() => {
+    if (state.raceMonth >= state.m1) return stop();
+    state.raceMonth++; renderRace();
+  }, 900);
+};
+document.getElementById("raceSlider").oninput = e => { stop(); state.raceMonth = +e.target.value; renderRace(); };
+document.querySelectorAll("#raceMode button").forEach(b => b.onclick = () => {
+  state.raceMode = b.dataset.v; document.querySelectorAll("#raceMode button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderRace();
+});
+
+/* ---------- Fiche personnalité ---------- */
+function selectPerson(id) { state.person = id; renderPerson(); race.g && race.g.selectAll("g.bar-row").classed("sel", d => d.id === id);
+  if (innerWidth < 900) document.getElementById("personCard").scrollIntoView({ behavior: "smooth", block: "start" }); }
+function renderPerson() {
+  const host = document.getElementById("person"); host.replaceChildren();
+  const tp = personTotals(state.m0, state.m1);
+  if (state.person == null) { let b = 0; tp.forEach((v, i) => { if (v > tp[b]) b = i; }); state.person = b; }
+  const id = state.person, p = D.people[id], color = pc(p[1]);
+  const rank = 1 + Array.from(tp).filter(v => v > tp[id]).length;
+  const totalAll = d3.sum(tp);
+  const recs = D.P.filter(r => r[0] === id && state.types.has(r[3]) && chanOK(r[2]));
+  const byMonth = d3.range(NM).map(m => d3.sum(recs.filter(r => r[1] === m), r => r[4]));
+  const inPeriod = recs.filter(r => r[1] >= state.m0 && r[1] <= state.m1);
+  const byChan = d3.rollups(inPeriod, v => d3.sum(v, r => r[4]), r => r[2]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const byType = d3.range(3).map(t => d3.sum(inPeriod.filter(r => r[3] === t), r => r[4]));
+
+  const top = el("div", "person-top"), av = el("div", "avatar", initials(prettyName(p[0]).split(" ").reverse().join(" ")));
+  av.style.background = color;
+  const info = el("div"); const pn = el("div", "pname", prettyName(p[0])); const bd = candBadge(id); if (bd) pn.append(bd); info.append(pn);
+  const pill = el("div", "pill"); const sw = el("span", "sw"); sw.style.background = color;
+  pill.append(sw, document.createTextNode(p[1] + (p[2] && p[1] !== "Gouvernement" ? " · membre du gouvernement" : ""))); info.append(pill);
+  top.append(av, info); host.append(top);
+
+  const stats = el("div", "pstats");
+  [[fmtH(tp[id]), "sur la période"], [tp[id] > 0 ? "n°" + rank : "—", "au classement"], [totalAll ? fmtPct(tp[id] / totalAll) : "—", "du temps total"]]
+    .forEach(([v, k]) => { const s = el("div", "pstat"); s.append(el("div", "v", v), el("div", "k", k)); stats.append(s); });
+  host.append(stats);
+
+  // Barres mensuelles
+  host.append(el("div", "mini-h", "Mois par mois"));
+  const W = host.clientWidth || 320, H = 110, M = { t: 14, b: 18 };
+  const svg = d3.select(host).append("svg").attr("width", W).attr("height", H);
+  const x = d3.scaleBand().domain(d3.range(NM)).range([0, W]).padding(.22);
+  const yM = d3.max(byMonth) || 1, y = d3.scaleLinear().domain([0, yM]).range([H - M.b, M.t]);
+  const g = svg.selectAll("g").data(byMonth).join("g").attr("class", "cell");
+  g.append("rect").attr("x", (d, i) => x(i) - 2).attr("width", x.bandwidth() + 4).attr("y", 0).attr("height", H).attr("fill", "transparent");
+  g.append("path").attr("fill", (d, i) => color).attr("opacity", (d, i) => i >= state.m0 && i <= state.m1 ? 1 : .3)
+    .attr("d", (d, i) => { const h = Math.max(d > 0 ? 2 : 0, y(0) - y(d)), x0 = x(i), w = x.bandwidth(), r = Math.min(4, w / 2, h);
+      return `M${x0},${y(0)}V${y(0) - h + r}Q${x0},${y(0) - h} ${x0 + r},${y(0) - h}H${x0 + w - r}Q${x0 + w},${y(0) - h} ${x0 + w},${y(0) - h + r}V${y(0)}Z`; });
+  g.append("text").attr("x", (d, i) => x(i) + x.bandwidth() / 2).attr("y", H - 4).attr("text-anchor", "middle").style("font-size", "10px").style("fill", "var(--muted)")
+    .text((d, i) => x.step() >= 30 ? D.months[i] : (i === 0 || D.months[i] === "Jan" || D.months[i] === "Juil") ? (D.months[i] === "Jan" ? ml(i) : D.months[i]) : "");
+  g.on("pointermove", (e, d) => { const i = byMonth.indexOf(d); showTip(e, t => { t.append(el("div", "t", MONTHS_FULL[i])); t.append(el("div", "big", fmtH(d))); }); }).on("pointerleave", hideTip);
+  const peak = byMonth.indexOf(yM);
+  if (yM > 0) svg.append("text").attr("x", x(peak) + x.bandwidth() / 2).attr("y", y(yM) - 4).attr("text-anchor", "middle").style("font-size", "10.5px").style("font-weight", 600).text(fmtH(yM));
+
+  // Chaînes
+  host.append(el("div", "mini-h", "Où l'entendre"));
+  const cmax = byChan[0] ? byChan[0][1] : 1;
+  byChan.forEach(([ci, v]) => {
+    const row = el("div"); row.style.cssText = "display:grid;grid-template-columns:110px 1fr 64px;gap:8px;align-items:center;font-size:12.5px;margin:4px 0";
+    const bar = el("div"); bar.style.cssText = `height:10px;border-radius:0 4px 4px 0;background:${color};width:${Math.max(2, v / cmax * 100)}%`;
+    const track = el("div"); track.append(bar);
+    const n = el("span", null, CH_NAMES[ci]); n.style.cssText = "color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    const val = el("b", null, fmtH(v)); val.style.textAlign = "right";
+    row.append(n, track, val); host.append(row);
+  });
+  if (!byChan.length) host.append(el("div", "sub", "Aucun temps de parole avec ces filtres."));
+  const tsum = d3.sum(byType);
+  if (tsum) {
+    host.append(el("div", "mini-h", "Type d'émission"));
+    const bar = el("div"); bar.style.cssText = "display:flex;height:12px;border-radius:4px;overflow:hidden;gap:2px";
+    const shades = [1, .65, .38];
+    byType.forEach((v, i) => { if (!v) return; const s = el("div"); s.style.cssText = `flex:${v};background:${color};opacity:${shades[i]}`; bar.append(s); });
+    host.append(bar);
+    const lg = el("div", "legend");
+    byType.forEach((v, i) => { const l = el("span", "lg"); const s = el("span", "sw"); s.style.background = color; s.style.opacity = shades[i]; l.append(s, document.createTextNode(`${TYPES[i]} ${fmtPct(v / tsum)}`)); lg.append(l); });
+    host.append(lg);
+  }
+}
+// Recherche
+const search = document.getElementById("search"), sugg = document.getElementById("sugg");
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const searchIndex = D.people.map((p, i) => ({ i, k: norm(p[0] + " " + prettyName(p[0]) + " " + p[1]) }));
+search.oninput = () => {
+  const q = norm(search.value.trim()); sugg.replaceChildren();
+  if (q.length < 2) { sugg.style.display = "none"; return; }
+  const tp = personTotals(0, LAST);
+  const res = searchIndex.filter(s => (!state.candOnly || CAND.has(s.i)) && q.split(/\s+/).every(w => s.k.includes(w))).sort((a, b) => tp[b.i] - tp[a.i]).slice(0, 12);
+  res.forEach(({ i }) => {
+    const b = el("button"); b.append(el("span", null, prettyName(D.people[i][0])), el("span", "m", short(D.people[i][1]) + " · " + fmtH(tp[i])));
+    b.onclick = () => { selectPerson(i); search.value = ""; sugg.style.display = "none"; };
+    sugg.append(b);
+  });
+  sugg.style.display = res.length ? "block" : "none";
+};
+search.onkeydown = e => { if (e.key === "Enter") { const f = sugg.querySelector("button"); f && f.click(); } if (e.key === "Escape") sugg.style.display = "none"; };
+document.addEventListener("click", e => { if (!e.target.closest(".search-wrap")) sugg.style.display = "none"; });
+
+/* ---------- Flux par parti ---------- */
+// Formations nommées : toutes celles qui, sur l'ensemble des relevés, font au moins autant que Place publique
+const STREAM_PARTIES = (() => {
+  const t = new Map(); for (const r of D.G) t.set(r[0], (t.get(r[0]) || 0) + r[4]);
+  const ranked = [...t].sort((a, b) => b[1] - a[1]).map(d => D.parties[d[0]]);
+  return ranked.slice(0, ranked.indexOf("Place publique") + 1);
+})();
+function streamData() {
+  const by = d3.range(NM).map(() => new Map());
+  for (const r of D.G) if (recOK(r, true)) by[r[1]].set(r[0], (by[r[1]].get(r[0]) || 0) + r[4]);
+  const tot = new Map();
+  for (let m = state.m0; m <= state.m1; m++) by[m].forEach((v, k) => tot.set(k, (tot.get(k) || 0) + v));
+  const keys = [...tot].sort((a, b) => b[1] - a[1]).map(d => D.parties[d[0]]).filter(k => STREAM_PARTIES.includes(k));
+  const rows = by.map((mp, m) => {
+    const o = { m, Autres: 0 }; keys.forEach(k => o[k] = 0);
+    mp.forEach((v, k) => { const n = D.parties[k]; if (n in o) o[n] += v; else o.Autres += v; });
+    return o;
+  });
+  return { keys: [...keys, "Autres"], rows, tot };
+}
+function renderStream() {
+  const host = document.getElementById("stream"); host.replaceChildren();
+  const { keys, rows } = streamData();
+  const W = host.clientWidth, H = W < 560 ? 260 : 340, M = { l: 48, r: 12, t: 10, b: 26 };
+  const pct = state.streamMode === "pct";
+  const stackRows = rows.map(r => { const s = d3.sum(keys, k => r[k]) || 1; const o = { m: r.m }; keys.forEach(k => o[k] = pct ? r[k] / s : r[k] / 3600); return o; });
+  const series = d3.stack().keys(keys).order(d3.stackOrderNone)(stackRows);
+  const x = d3.scaleLinear().domain([0, LAST]).range([M.l, W - M.r]);
+  const y = d3.scaleLinear().domain([0, pct ? 1 : d3.max(series.at(-1), d => d[1]) * 1.04]).nice().range([H - M.b, M.t]);
+  const color = k => k === "Autres" ? OTHER : pc(k);
+  const svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Temps de parole par formation et par mois");
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${M.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickSize(-(W - M.l - M.r)).tickFormat(v => pct ? Math.round(v * 100) + " %" : v + " h"));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - M.b})`)
+    .call(d3.axisBottom(x).tickValues(d3.range(NM).filter(i => (W - M.l) / NM >= 46 || i % 3 === 0)).tickSize(0).tickPadding(8)
+      .tickFormat(i => D.months[i] === "Jan" || i === 0 ? ml(i) : D.months[i]));
+  const area = d3.area().x(d => x(d.data.m)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
+  svg.append("g").selectAll("path").data(series).join("path")
+    .attr("fill", d => color(d.key)).attr("stroke", "var(--surface)").attr("stroke-width", 1)
+    .attr("opacity", d => state.focusParty && state.focusParty !== d.key ? .12 : .92)
+    .attr("d", area).style("cursor", "pointer")
+    .on("click", (e, d) => { state.focusParty = state.focusParty === d.key ? null : d.key; renderStream(); });
+  // Zone hors période
+  if (state.m0 > 0) svg.append("rect").attr("x", M.l).attr("y", M.t).attr("width", x(state.m0) - M.l).attr("height", H - M.b - M.t).attr("fill", "var(--surface)").attr("opacity", .7);
+  if (state.m1 < LAST) svg.append("rect").attr("x", x(state.m1)).attr("y", M.t).attr("width", W - M.r - x(state.m1)).attr("height", H - M.b - M.t).attr("fill", "var(--surface)").attr("opacity", .7);
+  // Étiquettes directes pour les 4 plus grosses couches (au milieu de la période)
+  const mid = Math.round((state.m0 + state.m1) / 2);
+  series.slice(0, 4).forEach(s => {
+    if (state.focusParty && state.focusParty !== s.key) return;
+    const d = s[mid], h = y(d[0]) - y(d[1]);
+    if (h > 16) svg.append("text").attr("x", x(mid)).attr("y", (y(d[0]) + y(d[1])) / 2).attr("dy", ".35em").attr("text-anchor", "middle")
+      .style("font-size", "11.5px").style("font-weight", 600).style("fill", "#fff").style("pointer-events", "none").text(short(s.key));
+  });
+  // Repères de changement d'année
+  D.years.forEach((yv, i) => { if (i > 0 && yv !== D.years[i - 1]) {
+    svg.append("line").attr("x1", x(i)).attr("x2", x(i)).attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--text)").attr("stroke-width", 1).attr("stroke-dasharray", "3 4").attr("opacity", .45).style("pointer-events", "none");
+    svg.append("text").attr("x", x(i) + 6).attr("y", M.t + 12).style("font-size", "11px").style("font-weight", 600).style("fill", "var(--text-2)").style("pointer-events", "none").text(yv);
+  } });
+  // Crosshair
+  const cross = svg.append("line").attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--text)").attr("stroke-width", 1).attr("opacity", 0).style("pointer-events", "none");
+  svg.append("rect").attr("x", M.l).attr("y", M.t).attr("width", W - M.l - M.r).attr("height", H - M.t - M.b).attr("fill", "transparent")
+    .on("pointermove", e => {
+      const [mx] = d3.pointer(e); const m = Math.max(0, Math.min(LAST, Math.round(x.invert(mx))));
+      cross.attr("x1", x(m)).attr("x2", x(m)).attr("opacity", .5);
+      const r = rows[m], tot = d3.sum(keys, k => r[k]);
+      showTip(e, t => {
+        t.append(el("div", "t", MONTHS_FULL[m] + " · " + fmtH(tot)));
+        [...keys].reverse().forEach(k => tipRow(t, color(k), short(k), pct ? fmtPct(r[k] / (tot || 1)) : fmtH(r[k])));
+      });
+    })
+    .on("pointerleave", () => { cross.attr("opacity", 0); hideTip(); })
+    .on("click", e => {
+      const [mx, my] = d3.pointer(e); const m = Math.max(0, Math.min(LAST, Math.round(x.invert(mx)))); const v = y.invert(my);
+      const s = series.find(s => s[m][0] <= v && v <= s[m][1]); if (s) { state.focusParty = state.focusParty === s.key ? null : s.key; renderStream(); }
+    });
+  // Légende
+  const lg = document.getElementById("streamLegend"); lg.replaceChildren();
+  [...keys].forEach(k => {
+    const b = el("button", "lg" + (state.focusParty && state.focusParty !== k ? " dim" : "")); const s = el("span", "sw"); s.style.background = color(k);
+    b.append(s, document.createTextNode(short(k))); b.onclick = () => { state.focusParty = state.focusParty === k ? null : k; renderStream(); };
+    lg.append(b);
+  });
+}
+document.querySelectorAll("#streamMode button").forEach(b => b.onclick = () => {
+  state.streamMode = b.dataset.v; document.querySelectorAll("#streamMode button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderStream();
+});
+
+/* ---------- Heatmap ---------- */
+function renderHeat() {
+  const host = document.getElementById("heat"); host.replaceChildren();
+  const cell = new Map(), chanTot = new Map(), partyTot = new Map();
+  for (const r of D.G) {
+    if (!(r[1] >= state.m0 && r[1] <= state.m1 && state.types.has(r[3]) && state.svc.has(D.channels[r[2]].t))) continue;
+    const k = r[0] + "|" + r[2];
+    cell.set(k, (cell.get(k) || 0) + r[4]); chanTot.set(r[2], (chanTot.get(r[2]) || 0) + r[4]); partyTot.set(r[0], (partyTot.get(r[0]) || 0) + r[4]);
+  }
+  const parties = [...partyTot].sort((a, b) => b[1] - a[1]).slice(0, 12).map(d => d[0]);
+  const order = SVC.map(s => s[0]);
+  const chans = [...chanTot].filter(([, v]) => v > 3600).sort((a, b) => order.indexOf(D.channels[a[0]].t) - order.indexOf(D.channels[b[0]].t) || b[1] - a[1]).map(d => d[0]);
+  const parentW = host.parentElement.clientWidth;
+  const labelW = parentW < 560 ? 92 : 150, cw = Math.max(36, Math.min(58, (parentW - labelW) / chans.length)), ch = 30, headH = 92;
+  const W = labelW + cw * chans.length + 70, H = headH + ch * parties.length + 4;
+  let vmax = 0; cell.forEach((v, k) => { const c = +k.split("|")[1]; if (chans.includes(c) && parties.includes(+k.split("|")[0])) vmax = Math.max(vmax, v / chanTot.get(c)); });
+  vmax = Math.min(1, Math.ceil(vmax * 20) / 20);
+  document.getElementById("hmMax").textContent = Math.round(vmax * 100) + " %";
+  const cs = getComputedStyle(document.documentElement);
+  const ramp = [0, 1, 2, 3, 4].map(i => cs.getPropertyValue("--seq-" + i).trim());
+  const col = d3.scaleSequential(d3.interpolateRgbBasis(ramp)).domain([0, vmax]);
+  const svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Part des formations par chaîne");
+  // En-têtes de colonnes
+  const heads = svg.append("g").selectAll("g").data(chans).join("g").attr("class", "colhead")
+    .attr("transform", (c, i) => `translate(${labelW + i * cw + cw / 2},${headH - 8}) rotate(-50)`)
+    .on("click", (e, c) => { state.chan = state.chan === c ? -1 : c; chanSel.value = state.chan; update(); });
+  heads.append("text").text(c => CH_NAMES[c]).style("font-size", "11px").style("font-weight", c => c === state.chan ? 700 : 500)
+    .style("fill", c => c === state.chan ? "var(--accent)" : "var(--text-2)");
+  // Séparateurs entre types de média
+  chans.forEach((c, i) => { if (i > 0 && D.channels[c].t !== D.channels[chans[i - 1]].t)
+    svg.append("line").attr("x1", labelW + i * cw).attr("x2", labelW + i * cw).attr("y1", headH - 4).attr("y2", H).attr("stroke", "var(--text-2)").attr("stroke-width", 1).attr("stroke-dasharray", "2 3"); });
+  const rows = svg.append("g").selectAll("g").data(parties).join("g").attr("transform", (p, j) => `translate(0,${headH + j * ch})`);
+  rows.append("rect").attr("x", 0).attr("y", ch / 2 - 5).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", p => pc(D.parties[p]));
+  rows.append("text").attr("x", 16).attr("y", ch / 2).attr("dy", ".35em").style("font-size", "12px").style("fill", "var(--text-2)")
+    .text(p => { const s = short(D.parties[p]); return s.length > (labelW < 120 ? 11 : 20) ? s.slice(0, labelW < 120 ? 10 : 19) + "…" : s; });
+  rows.each(function (p) {
+    const g = d3.select(this);
+    const cells = g.selectAll("g.cell").data(chans.map(c => ({ c, p, v: (cell.get(p + "|" + c) || 0), share: (cell.get(p + "|" + c) || 0) / chanTot.get(c) })))
+      .join("g").attr("class", "cell").attr("transform", (d, i) => `translate(${labelW + i * cw},0)`);
+    cells.append("rect").attr("x", 1).attr("y", 1).attr("width", cw - 2).attr("height", ch - 2).attr("rx", 4)
+      .attr("fill", d => col(Math.min(d.share, vmax))).attr("opacity", d => state.chan >= 0 && d.c !== state.chan ? .35 : 1);
+    if (cw >= 36) cells.append("text").attr("x", cw / 2).attr("y", ch / 2).attr("dy", ".35em").attr("text-anchor", "middle")
+      .style("font-size", "10.5px").style("pointer-events", "none")
+      .style("fill", d => d.share > vmax * .5 ? (ramp[0].startsWith("#e") ? "#fff" : "#0b0b0b") : "var(--text-2)")
+      .text(d => d.share >= .005 ? Math.round(d.share * 100) : "");
+    cells.on("pointermove", (e, d) => showTip(e, t => {
+      t.append(el("div", "t", CH_NAMES[d.c])); t.append(el("div", "big", fmtPct(d.share)));
+      t.append(el("div", null, `${D.parties[d.p]} · ${fmtH(d.v)}`));
+    })).on("pointerleave", hideTip)
+      .on("click", (e, d) => { state.chan = state.chan === d.c ? -1 : d.c; chanSel.value = state.chan; update(); });
+  });
+}
+
+/* ---------- Tableau ---------- */
+function renderTable() {
+  const tp = personTotals(state.m0, state.m1);
+  const total = d3.sum(tp);
+  const byMonth = new Map();
+  for (const r of D.P) if (state.types.has(r[3]) && chanOK(r[2])) { let a = byMonth.get(r[0]); if (!a) byMonth.set(r[0], a = new Array(NM).fill(0)); a[r[1]] += r[4]; }
+  const q = norm(state.q);
+  let rows = [];
+  tp.forEach((v, i) => { if (v > 0) rows.push({ i, v, name: prettyName(D.people[i][0]), party: D.people[i][1] }); });
+  rows.sort((a, b) => b.v - a.v); rows.forEach((r, k) => r.rank = k + 1);
+  if (q) rows = rows.filter(r => norm(r.name + " " + r.party).includes(q));
+  if (state.sort === "name") rows.sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  if (state.sort === "party") rows.sort((a, b) => a.party.localeCompare(b.party, "fr") || b.v - a.v);
+  document.getElementById("tableSub").textContent = `${rows.length.toLocaleString("fr-FR")} personnalités · ${MONTHS_FULL[state.m0]} – ${MONTHS_FULL[state.m1]}`;
+  const thead = document.querySelector("#table thead"); thead.replaceChildren();
+  const tr = el("tr");
+  [["#", "total", "rank"], ["Personnalité", "name"], ["Formation", "party"], ["Temps", "total", "num"], ["Part", "total", "num"], ["Évolution", null]].forEach(([l, s, c]) => {
+    const th = el("th", c || "", l + (s && state.sort === s && l !== "#" ? " ↓" : "")); if (s) th.onclick = () => { state.sort = s; renderTable(); }; tr.append(th);
+  });
+  thead.append(tr);
+  const tb = document.querySelector("#table tbody"); tb.replaceChildren();
+  rows.slice(0, state.tableLimit).forEach(r => {
+    const row = el("tr"); row.onclick = () => { selectPerson(r.i); document.getElementById("personCard").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    const pt = el("td"); const s = el("span", "sw"); s.style.cssText = `background:${pc(r.party)};display:inline-block;margin-right:7px;vertical-align:-1px`;
+    pt.append(s, document.createTextNode(short(r.party)));
+    const nm = el("td", null, r.name); nm.style.fontWeight = 600; const bd = candBadge(r.i); if (bd) nm.append(bd);
+    const spark = el("td"); spark.append(sparkline(byMonth.get(r.i) || [], pc(r.party)));
+    row.append(el("td", "rank", r.rank), nm, pt, el("td", "num", fmtH(r.v)), el("td", "num", fmtPct(r.v / total)), spark);
+    tb.append(row);
+  });
+  document.getElementById("more").style.display = rows.length > state.tableLimit ? "" : "none";
+}
+function sparkline(arr, color) {
+  const w = 114, h = 22, m = d3.max(arr) || 1, ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg"); svg.setAttribute("width", w); svg.setAttribute("height", h);
+  const bw = w / NM;
+  arr.forEach((v, i) => {
+    const r = document.createElementNS(ns, "rect"), bh = Math.max(v > 0 ? 1.5 : 0, v / m * (h - 2));
+    r.setAttribute("x", i * bw + 1); r.setAttribute("width", bw - 2); r.setAttribute("y", h - bh); r.setAttribute("height", bh); r.setAttribute("rx", 1.5);
+    r.setAttribute("fill", color); r.setAttribute("opacity", i >= state.m0 && i <= state.m1 ? 1 : .25); svg.append(r);
+  });
+  return svg;
+}
+document.getElementById("more").onclick = () => { state.tableLimit += 50; renderTable(); };
+document.getElementById("tableSearch").oninput = e => { state.q = e.target.value; state.tableLimit = 25; renderTable(); };
+
+/* ---------- Thème ---------- */
+document.getElementById("theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("tp-theme", root.dataset.theme); } catch (e) {}
+  renderHeat();
+};
+try { const t = localStorage.getItem("tp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+
+/* ---------- Orchestration ---------- */
+function update() {
+  stop();
+  m0.value = state.m0; m1.value = state.m1; syncPresets();
+  if (state.raceMonth < state.m0 || state.raceMonth > state.m1) state.raceMonth = state.m1;
+  renderCandNote();
+  document.getElementById("raceSub").textContent = (state.candOnly ? "Les 12 candidats 2027 les plus entendus" : "Les 12 personnalités les plus entendues") + " · cliquez une barre pour voir la fiche";
+  renderKPIs(); renderRace(); renderPerson(); renderStream(); renderHeat(); renderTable();
+}
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; update(); }, 150); });
+update();
+// Petite intro : la course démarre seule au chargement
+state.raceMonth = 0; renderRace(false); setTimeout(() => playBtn.click(), 600);
+</script>
+</body>
+</html>
