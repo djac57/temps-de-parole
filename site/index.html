@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-<script src="data.js"></script>
+<script src="data.js?v=629f8d037c"></script>
 <style>
 :root {
   color-scheme: light;
@@ -414,15 +414,15 @@ function chips(containerId, items, isOn, toggle) {
 const toggleSet = (set, v) => { if (set.has(v)) { if (set.size > 1) set.delete(v); } else set.add(v); };
 chips("svc", SVC, v => state.svc.has(v), v => { toggleSet(state.svc, v); if (state.chan >= 0 && !chanOK(state.chan)) state.chan = -1; fillChannels(); });
 chips("ptype", TYPES.map((t, i) => [i, t]), v => state.types.has(v), v => toggleSet(state.types, v));
-m0.onchange = () => { state.m0 = +m0.value; if (state.m1 < state.m0) state.m1 = state.m0; state.raceMonth = state.m1; update(); };
-m1.onchange = () => { state.m1 = +m1.value; if (state.m0 > state.m1) state.m0 = state.m1; state.raceMonth = state.m1; update(); };
+m0.onchange = () => { state.m0 = +m0.value; if (state.m1 < state.m0) state.m1 = state.m0; update(); replayRace(); };
+m1.onchange = () => { state.m1 = +m1.value; if (state.m0 > state.m1) state.m0 = state.m1; update(); replayRace(); };
 chanSel.onchange = () => { state.chan = +chanSel.value; update(); };
 document.getElementById("reset").onclick = () => {
   Object.assign(state, { m0: DEFAULT_M0, m1: LAST, chan: -1, raceMonth: LAST, focusParty: null, candOnly: true });
   candBtn.setAttribute("aria-pressed", true);
   state.svc = new Set(SVC.map(s => s[0])); state.types = new Set(TYPES.map((t, i) => i));
   document.querySelectorAll("#svc .chip, #ptype .chip").forEach(c => c.setAttribute("aria-pressed", true));
-  fillChannels(); update();
+  fillChannels(); update(); replayRace();
 };
 fillChannels();
 // Raccourcis de période
@@ -431,7 +431,7 @@ const presetDefs = [yearRange(YEARS.at(-2)), yearRange(YEARS.at(-1)), ["5 ans", 
 const presetHost = document.getElementById("presets");
 presetDefs.forEach(([label, a, b]) => {
   const c = el("button", "chip", label); c.dataset.a = a; c.dataset.b = b;
-  c.onclick = () => { state.m0 = a; state.m1 = b; state.raceMonth = b; update(); };
+  c.onclick = () => { state.m0 = a; state.m1 = b; update(); replayRace(); };
   presetHost.append(c);
 });
 const candBtn = document.getElementById("cand"), candNote = document.getElementById("candNote");
@@ -567,6 +567,15 @@ playBtn.onclick = () => {
     state.raceMonth++; renderRace();
   }, 900);
 };
+// Nouvelle période : la course repart du premier mois disponible et se rejoue
+function replayRace() {
+  stop();
+  const start = Math.max(state.m0, PS);
+  if (state.m1 < PS) return;
+  state.raceMonth = start; renderRace(false);
+  if (state.m1 > start) setTimeout(() => { if (!timer) playBtn.click(); }, 350);
+  else { state.raceMonth = state.m1; renderRace(); }
+}
 document.getElementById("raceSlider").oninput = e => { stop(); state.raceMonth = +e.target.value; renderRace(); };
 document.querySelectorAll("#raceMode button").forEach(b => b.onclick = () => {
   state.raceMode = b.dataset.v; document.querySelectorAll("#raceMode button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderRace();
@@ -942,7 +951,7 @@ function update() {
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; heat.key = null; update(); }, 150); });
 update();
 // Petite intro : la course démarre seule au chargement
-state.raceMonth = Math.max(state.m0, PS); renderRace(false); setTimeout(() => playBtn.click(), 600);
+replayRace();
 </script>
 </body>
 </html>

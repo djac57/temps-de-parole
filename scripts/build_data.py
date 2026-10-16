@@ -264,5 +264,14 @@ with open(OUT, "w", encoding="utf-8") as f:
     f.write("window.TP_DATA=")
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     f.write(";")
+# Empreinte du fichier dans la page : évite qu'un navigateur garde un vieux data.js en cache
+import hashlib
+digest = hashlib.sha1(open(OUT, "rb").read()).hexdigest()[:10]
+page = os.path.join(os.path.dirname(OUT), "index.html")
+if os.path.exists(page):
+    html_src = open(page, encoding="utf-8").read()
+    new_src = re.sub(r'src="data\.js(\?v=[\w-]+)?"', f'src="data.js?v={digest}"', html_src)
+    if new_src != html_src:
+        open(page, "w", encoding="utf-8").write(new_src)
 print(len(periods), "mois,", len(people_out), "personnalités,", len(party_names), "partis,", len(channels), "chaînes,",
       len(elections), "scrutin(s),", len(P), "+", len(G), "enregistrements,", os.path.getsize(OUT) // 1024, "Ko")
