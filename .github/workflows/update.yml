@@ -29,6 +29,9 @@ jobs:
       - name: Télécharger les relevés Arcom
         run: python scripts/fetch_arcom.py
 
+      - name: Télécharger les relevés de campagne électorale
+        run: python scripts/fetch_elections.py
+
       - name: Construire data.js
         run: python scripts/build_data.py
 

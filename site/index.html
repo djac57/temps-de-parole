@@ -195,7 +195,7 @@ footer a { color: var(--accent); }
     <div class="fgroup" id="svc"><span class="flabel">Média</span></div>
     <div class="fgroup"><span class="flabel">Chaîne</span><select id="chan" aria-label="Chaîne"></select></div>
     <div class="fgroup" id="ptype"><span class="flabel">Émissions</span></div>
-    <button class="chip cand" id="cand" aria-pressed="false" title="Candidats déclarés ou pressentis pour la présidentielle 2027">★ Candidats 2027</button>
+    <button class="chip cand" id="cand" aria-pressed="true" title="Candidats déclarés ou pressentis pour la présidentielle 2027">★ Candidats 2027</button>
     <button class="reset" id="reset">Réinitialiser</button>
   </div>
   <div class="cand-note" id="candNote"></div>
@@ -236,7 +236,7 @@ footer a { color: var(--accent); }
 
     <div class="card">
       <div class="card-head">
-        <div><h2>Chaque chaîne, son équilibre</h2><p class="sub">Part de chaque formation dans le temps politique de la chaîne · cliquez une chaîne pour filtrer</p></div>
+        <div><h2>Chaque chaîne, son équilibre</h2><p class="sub">Part de chaque formation dans le temps politique de la chaîne · chaînes classées par audience · cliquez une chaîne : les formations se reclassent selon leur part</p></div>
       </div>
       <div class="hm-scroll"><div id="heat"></div></div>
       <div class="hm-scale"><span>0&nbsp;%</span><div class="hm-grad"></div><span id="hmMax"></span></div>
@@ -257,6 +257,8 @@ footer a { color: var(--accent); }
     JT = journaux télévisés et radio, Magazines = magazines d'information, Autres = autres programmes.
     Les personnalités sont rattachées à leur formation principale&nbsp;; les membres du gouvernement sans étiquette apparaissent sous «&nbsp;Gouvernement&nbsp;».
     Le graphique par formation et la heatmap utilisent les relevés « partis », qui comptent l'exécutif (Président, Gouvernement) à part.
+    Pendant les campagnes électorales (bandeau bleu), l'Arcom publie le temps de parole lié au scrutin à part, par chaîne et par période cumulée&nbsp;: il est réintégré ici mois par mois, sous le type «&nbsp;Campagne&nbsp;» (non ventilé entre JT, magazines et autres), et le temps des listes municipales apparaît sous «&nbsp;Listes municipales (campagne)&nbsp;».
+    Les chaînes sont classées par audience 2025 (Médiamétrie) au sein de chaque type de média.
     Les relevés « partis » sont complets ; les listes par personnalité ne retiennent que les temps cumulés supérieurs à une minute, d'où un léger écart (≈ 3 %) entre le total et la somme des personnalités.
   </footer>
 </div>
@@ -265,10 +267,11 @@ footer a { color: var(--accent); }
 <script>
 const D = window.TP_DATA;
 const MONTHS_FULL = D.monthsFull, NM = D.months.length, LAST = NM - 1;
+const DEFAULT_M0 = D.years.indexOf(D.years[LAST]); // par défaut : l'année la plus récente
 const ml = i => D.months[i] + " " + String(D.years[i]).slice(2); // « Jan 26 »
 const YEARS = [...new Set(D.years)];
 document.getElementById("span").textContent = document.getElementById("span2").textContent = `de ${MONTHS_FULL[0].toLowerCase()} à ${MONTHS_FULL[LAST].toLowerCase()}`;
-const TYPES = ["JT", "Magazines", "Autres"];
+const TYPES = ["JT", "Magazines", "Autres", "Campagne"];
 const SVC = [["Chaîne généraliste","TV généralistes"],["Chaîne d'information","Info continue"],["Radio","Radios"]];
 const CH_NAMES = D.channels.map(c => c.n === "franceinfo:" ? "franceinfo TV" : c.n === "France Info" ? "France Info radio" : c.n === "RMC Decouverte" ? "RMC Découverte" : c.n);
 
@@ -283,14 +286,25 @@ const PARTY_COLORS = {
   "La France insoumise": "#d4232b", "Parti communiste français": "#9e1b21", "Lutte Ouvrière": "#8e1a1a", "Nouveau parti anticapitaliste": "#a83232",
   "Les Ecologistes": "#2fa84f", "Génération Ecologie": "#66b84a", "Génération.s": "#c45ea0",
   "Gouvernement": "#8a8f9e", "Président de la République": "#b08d57", "Sans étiquette": "#a9a79e", "Divers": "#c9b48f", "Identité-Libertés": "#4a3f73", "La France humaniste": "#8d6e9e",
-  "Debout !": "#e06c4f", "La Convention": "#d98fa0", "Les Patriotes": "#5a6b8c",
+  "Debout !": "#e06c4f", "Listes municipales (campagne)": "#8fb5ae", "L'APRES": "#c0392b", "La Convention": "#d98fa0", "Les Patriotes": "#5a6b8c",
 };
 const OTHER = "#d3d1c8";
+// Part d'audience 2025 (Médiamétrie). TV : bilan annuel ; radio : vague sept.–oct. 2025 (PdA 13 ans et +).
+// Les valeurs marquées « est » sont des ordres de grandeur, faute de chiffre publié trouvé.
+const AUDIENCE = {
+  "TF1": [18.7], "France 2": [14.9], "France 3": [8.6, "est"], "M6": [7.9], "France 5": [3.6, "est"], "TMC": [3.0], "W9": [2.5],
+  "RMC Decouverte": [2.0, "est"], "RMC Story": [1.6, "est"], "RMC Life": [0.5, "est"], "T18": [0.5, "est"], "Novo19": [0.3, "est"], "C8": [0, "est"],
+  "CNews": [3.4], "BFMTV": [2.8], "LCI": [2.0], "franceinfo:": [1.0, "est"],
+  "France Inter": [13.4], "RTL": [11.5], "RMC": [5.4], "Europe 1": [5.1], "France Info": [5.0],
+  "France Culture": [2.5, "est"], "Radio Classique": [1.8, "est"], "Sud Radio": [1.2, "est"], "BFM Business": [0.5, "est"],
+};
+const aud = ci => (AUDIENCE[D.channels[ci].n] || [0])[0];
+const audLabel = ci => { const a = AUDIENCE[D.channels[ci].n]; return a ? `Audience 2025 : ${a[1] ? "≈ " : ""}${a[0].toLocaleString("fr-FR")} %${a[1] ? " (estimation)" : ""}` : ""; };
 const pc = p => PARTY_COLORS[p] || OTHER;
 const SHORT = { "Rassemblement national": "RN", "La France insoumise": "LFI", "Les Républicains": "LR", "Parti socialiste": "PS",
   "Mouvement démocrate": "MoDem", "Parti communiste français": "PCF", "Union des démocrates et indépendants": "UDI",
   "Union des droites pour la République": "UDR", "Président de la République": "Président", "Les Ecologistes": "Écologistes",
-  "Divers Droite": "Div. droite", "Divers Gauche": "Div. gauche", "Divers Centre": "Div. centre" };
+  "Divers Droite": "Div. droite", "Listes municipales (campagne)": "Listes municipales", "Divers Gauche": "Div. gauche", "Divers Centre": "Div. centre" };
 const short = p => SHORT[p] || p;
 
 // Présidentielle 2027 : candidats déclarés ou pressentis (état à mi-octobre 2026, à ajuster si besoin)
@@ -298,7 +312,7 @@ const CANDIDATES = [
   ["LE PEN MARINE", "pressentie", "RN, selon la décision d'appel"], ["BARDELLA JORDAN", "pressenti", "RN, si Marine Le Pen est inéligible"],
   ["PHILIPPE EDOUARD", "déclaré"], ["ATTAL GABRIEL", "déclaré"], ["RETAILLEAU BRUNO", "déclaré", "désigné par LR"],
   ["ZEMMOUR ERIC", "déclaré"], ["BERTRAND XAVIER", "déclaré"], ["LISNARD DAVID", "déclaré"], ["DUPONT AIGNAN NICOLAS", "déclaré"],
-  ["MELENCHON JEAN LUC", "pressenti", "pas encore officiellement déclaré"], ["GLUCKSMANN RAPHAEL", "déclaré"], ["ROUSSEL FABIEN", "déclaré"],
+  ["MELENCHON JEAN LUC", "déclaré"], ["GLUCKSMANN RAPHAEL", "déclaré"], ["ROUSSEL FABIEN", "déclaré"],
   ["RUFFIN FRANCOIS", "déclaré"], ["TONDELIER MARINE", "déclarée"], ["BATHO DELPHINE", "déclarée"], ["BOUAMRANE KARIM", "déclaré"],
   ["CAZENEUVE BERNARD", "déclaré"], ["ARTHAUD NATHALIE", "déclarée"], ["PHILIPPOT FLORIAN", "déclaré"], ["ASSELINEAU FRANCOIS", "déclaré"],
   ["DE VILLEPIN DOMINIQUE", "pressenti"], ["KAZIB ANASSE", "déclaré"], ["LABIB SELMA", "déclarée"], ["BRANCO JUAN", "déclaré"],
@@ -313,7 +327,7 @@ const candBadge = i => { const c = CAND.get(i); if (!c) return null; const b = e
 const fmtH = s => {
   if (s < 60) return s + " s";
   if (s < 3600) return Math.round(s / 60) + " min";
-  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  const tm = Math.round(s / 60), h = Math.floor(tm / 60), m = tm % 60;
   return h >= 100 ? d3.format(",")(h).replace(/,/g, " ") + " h" : (m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`);
 };
 const fmtPct = v => (v * 100).toLocaleString("fr-FR", { maximumFractionDigits: v < 0.1 ? 1 : 0 }) + " %";
@@ -326,8 +340,8 @@ const prettyName = n => { // « NOM Prénom » → « Prénom Nom »
   return first.length ? first.join(" ") + " " + last.map(cap).join(" ") : parts.map(cap).join(" ");
 };
 
-const state = { m0: 0, m1: LAST, svc: new Set(SVC.map(s => s[0])), chan: -1, types: new Set([0, 1, 2]),
-  raceMode: "cumul", raceMonth: LAST, candOnly: false, streamMode: "abs", focusParty: null, person: null, tableLimit: 25, sort: "total", q: "" };
+const state = { m0: DEFAULT_M0, m1: LAST, svc: new Set(SVC.map(s => s[0])), chan: -1, types: new Set(TYPES.map((t, i) => i)),
+  raceMode: "cumul", raceMonth: LAST, candOnly: true, streamMode: "abs", focusParty: null, person: null, tableLimit: 25, sort: "total", q: "" };
 
 const chanOK = ci => state.svc.has(D.channels[ci].t) && (state.chan < 0 || state.chan === ci);
 const recOK = (r, ignorePeriod) => (ignorePeriod || (r[1] >= state.m0 && r[1] <= state.m1)) && state.types.has(r[3]) && chanOK(r[2]);
@@ -358,7 +372,8 @@ function fillChannels() {
   SVC.forEach(([t, label]) => {
     if (!state.svc.has(t)) return;
     const g = document.createElement("optgroup"); g.label = label;
-    D.channels.forEach((c, i) => { if (c.t === t) g.append(new Option(CH_NAMES[i], i)); });
+    D.channels.map((c, i) => i).filter(i => D.channels[i].t === t).sort((a, b) => aud(b) - aud(a))
+      .forEach(i => g.append(new Option(CH_NAMES[i], i)));
     chanSel.append(g);
   });
   chanSel.value = state.chan;
@@ -378,8 +393,9 @@ m0.onchange = () => { state.m0 = +m0.value; if (state.m1 < state.m0) state.m1 = 
 m1.onchange = () => { state.m1 = +m1.value; if (state.m0 > state.m1) state.m0 = state.m1; state.raceMonth = state.m1; update(); };
 chanSel.onchange = () => { state.chan = +chanSel.value; update(); };
 document.getElementById("reset").onclick = () => {
-  Object.assign(state, { m0: 0, m1: LAST, chan: -1, raceMonth: LAST, focusParty: null });
-  state.svc = new Set(SVC.map(s => s[0])); state.types = new Set([0, 1, 2]);
+  Object.assign(state, { m0: DEFAULT_M0, m1: LAST, chan: -1, raceMonth: LAST, focusParty: null, candOnly: true });
+  candBtn.setAttribute("aria-pressed", true);
+  state.svc = new Set(SVC.map(s => s[0])); state.types = new Set(TYPES.map((t, i) => i));
   document.querySelectorAll("#svc .chip, #ptype .chip").forEach(c => c.setAttribute("aria-pressed", true));
   fillChannels(); update();
 };
@@ -537,7 +553,7 @@ function renderPerson() {
   const byMonth = d3.range(NM).map(m => d3.sum(recs.filter(r => r[1] === m), r => r[4]));
   const inPeriod = recs.filter(r => r[1] >= state.m0 && r[1] <= state.m1);
   const byChan = d3.rollups(inPeriod, v => d3.sum(v, r => r[4]), r => r[2]).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const byType = d3.range(3).map(t => d3.sum(inPeriod.filter(r => r[3] === t), r => r[4]));
+  const byType = d3.range(TYPES.length).map(t => d3.sum(inPeriod.filter(r => r[3] === t), r => r[4]));
 
   const top = el("div", "person-top"), av = el("div", "avatar", initials(prettyName(p[0]).split(" ").reverse().join(" ")));
   av.style.background = color;
@@ -584,11 +600,11 @@ function renderPerson() {
   if (tsum) {
     host.append(el("div", "mini-h", "Type d'émission"));
     const bar = el("div"); bar.style.cssText = "display:flex;height:12px;border-radius:4px;overflow:hidden;gap:2px";
-    const shades = [1, .65, .38];
+    const shades = [1, .65, .38, .2];
     byType.forEach((v, i) => { if (!v) return; const s = el("div"); s.style.cssText = `flex:${v};background:${color};opacity:${shades[i]}`; bar.append(s); });
     host.append(bar);
     const lg = el("div", "legend");
-    byType.forEach((v, i) => { const l = el("span", "lg"); const s = el("span", "sw"); s.style.background = color; s.style.opacity = shades[i]; l.append(s, document.createTextNode(`${TYPES[i]} ${fmtPct(v / tsum)}`)); lg.append(l); });
+    byType.forEach((v, i) => { if (!v) return; const l = el("span", "lg"); const s = el("span", "sw"); s.style.background = color; s.style.opacity = shades[i]; l.append(s, document.createTextNode(`${TYPES[i]} ${fmtPct(v / tsum)}`)); lg.append(l); });
     host.append(lg);
   }
 }
@@ -664,6 +680,22 @@ function renderStream() {
     if (h > 16) svg.append("text").attr("x", x(mid)).attr("y", (y(d[0]) + y(d[1])) / 2).attr("dy", ".35em").attr("text-anchor", "middle")
       .style("font-size", "11.5px").style("font-weight", 600).style("fill", "#fff").style("pointer-events", "none").text(short(s.key));
   });
+  // Périodes de campagne électorale
+  const xDate = iso => { const i = D.ym.indexOf(iso.slice(0, 7)); if (i < 0) return null;
+    const [y, mo, d] = iso.split("-").map(Number); const days = new Date(y, mo, 0).getDate();
+    return x(Math.max(0, Math.min(LAST, i - .5 + (d - 1) / days))); };
+  (D.elections || []).forEach(e => {
+    const x0 = xDate(e.start), x1 = xDate(e.end); if (x0 == null || x1 == null) return;
+    const g = svg.append("g").style("pointer-events", "none");
+    g.append("rect").attr("x", x0).attr("y", M.t).attr("width", Math.max(2, x1 - x0)).attr("height", H - M.t - M.b)
+      .attr("fill", "var(--accent)").attr("opacity", .1);
+    g.append("line").attr("x1", x0).attr("x2", x0).attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--accent)").attr("stroke-dasharray", "2 3");
+    g.append("line").attr("x1", x1).attr("x2", x1).attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--accent)").attr("stroke-dasharray", "2 3");
+    g.append("text").attr("x", (x0 + x1) / 2).attr("y", M.t + 28).attr("text-anchor", "middle")
+      .style("font-size", "11px").style("font-weight", 600).style("fill", "var(--accent)").text("Campagne");
+    g.append("text").attr("x", (x0 + x1) / 2).attr("y", M.t + 42).attr("text-anchor", "middle")
+      .style("font-size", "10.5px").style("fill", "var(--accent)").text(e.name.toLowerCase());
+  });
   // Repères de changement d'année
   D.years.forEach((yv, i) => { if (i > 0 && yv !== D.years[i - 1]) {
     svg.append("line").attr("x1", x(i)).attr("x2", x(i)).attr("y1", M.t).attr("y2", H - M.b).attr("stroke", "var(--text)").attr("stroke-width", 1).attr("stroke-dasharray", "3 4").attr("opacity", .45).style("pointer-events", "none");
@@ -699,56 +731,86 @@ document.querySelectorAll("#streamMode button").forEach(b => b.onclick = () => {
 });
 
 /* ---------- Heatmap ---------- */
+// Le cadre (colonnes) est conservé d'un rendu à l'autre pour que les lignes puissent glisser
+const heat = { key: null };
+const N_HEAT = 12;
 function renderHeat() {
-  const host = document.getElementById("heat"); host.replaceChildren();
+  const host = document.getElementById("heat");
   const cell = new Map(), chanTot = new Map(), partyTot = new Map();
   for (const r of D.G) {
     if (!(r[1] >= state.m0 && r[1] <= state.m1 && state.types.has(r[3]) && state.svc.has(D.channels[r[2]].t))) continue;
     const k = r[0] + "|" + r[2];
     cell.set(k, (cell.get(k) || 0) + r[4]); chanTot.set(r[2], (chanTot.get(r[2]) || 0) + r[4]); partyTot.set(r[0], (partyTot.get(r[0]) || 0) + r[4]);
   }
-  const parties = [...partyTot].sort((a, b) => b[1] - a[1]).slice(0, 12).map(d => d[0]);
   const order = SVC.map(s => s[0]);
-  const chans = [...chanTot].filter(([, v]) => v > 3600).sort((a, b) => order.indexOf(D.channels[a[0]].t) - order.indexOf(D.channels[b[0]].t) || b[1] - a[1]).map(d => d[0]);
+  const chans = [...chanTot].filter(([, v]) => v > 3600).map(d => d[0])
+    .sort((a, b) => order.indexOf(D.channels[a].t) - order.indexOf(D.channels[b].t) || aud(b) - aud(a) || chanTot.get(b) - chanTot.get(a));
+  const sel = chans.includes(state.chan) ? state.chan : -1;
+  const allTot = d3.sum([...partyTot.values()]) || 1;
+  const share = (p, c) => (cell.get(p + "|" + c) || 0) / (chanTot.get(c) || 1);
+  // Avec une chaîne choisie, les formations se classent selon leur part sur cette chaîne
+  const score = p => sel >= 0 ? share(p, sel) : partyTot.get(p) / allTot;
+  const parties = [...partyTot.keys()].filter(p => score(p) > 0).sort((a, b) => score(b) - score(a)).slice(0, N_HEAT);
   const parentW = host.parentElement.clientWidth;
-  const labelW = parentW < 560 ? 92 : 150, cw = Math.max(36, Math.min(58, (parentW - labelW) / chans.length)), ch = 30, headH = 92;
-  const W = labelW + cw * chans.length + 70, H = headH + ch * parties.length + 4;
-  let vmax = 0; cell.forEach((v, k) => { const c = +k.split("|")[1]; if (chans.includes(c) && parties.includes(+k.split("|")[0])) vmax = Math.max(vmax, v / chanTot.get(c)); });
-  vmax = Math.min(1, Math.ceil(vmax * 20) / 20);
+  const labelW = parentW < 560 ? 92 : 168, cw = Math.max(36, Math.min(58, (parentW - labelW - 70) / chans.length)), ch = 30, headH = 92;
+  const W = labelW + cw * chans.length + 70, H = headH + ch * N_HEAT + 4;
+  let vmax = 0; parties.forEach(p => chans.forEach(c => vmax = Math.max(vmax, share(p, c))));
+  vmax = Math.max(.05, Math.min(1, Math.ceil(vmax * 20) / 20));
   document.getElementById("hmMax").textContent = Math.round(vmax * 100) + " %";
   const cs = getComputedStyle(document.documentElement);
   const ramp = [0, 1, 2, 3, 4].map(i => cs.getPropertyValue("--seq-" + i).trim());
   const col = d3.scaleSequential(d3.interpolateRgbBasis(ramp)).domain([0, vmax]);
-  const svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Part des formations par chaîne");
-  // En-têtes de colonnes
-  const heads = svg.append("g").selectAll("g").data(chans).join("g").attr("class", "colhead")
-    .attr("transform", (c, i) => `translate(${labelW + i * cw + cw / 2},${headH - 8}) rotate(-50)`)
-    .on("click", (e, c) => { state.chan = state.chan === c ? -1 : c; chanSel.value = state.chan; update(); });
-  heads.append("text").text(c => CH_NAMES[c]).style("font-size", "11px").style("font-weight", c => c === state.chan ? 700 : 500)
-    .style("fill", c => c === state.chan ? "var(--accent)" : "var(--text-2)");
-  // Séparateurs entre types de média
-  chans.forEach((c, i) => { if (i > 0 && D.channels[c].t !== D.channels[chans[i - 1]].t)
-    svg.append("line").attr("x1", labelW + i * cw).attr("x2", labelW + i * cw).attr("y1", headH - 4).attr("y2", H).attr("stroke", "var(--text-2)").attr("stroke-width", 1).attr("stroke-dasharray", "2 3"); });
-  const rows = svg.append("g").selectAll("g").data(parties).join("g").attr("transform", (p, j) => `translate(0,${headH + j * ch})`);
-  rows.append("rect").attr("x", 0).attr("y", ch / 2 - 5).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", p => pc(D.parties[p]));
-  rows.append("text").attr("x", 16).attr("y", ch / 2).attr("dy", ".35em").style("font-size", "12px").style("fill", "var(--text-2)")
-    .text(p => { const s = short(D.parties[p]); return s.length > (labelW < 120 ? 11 : 20) ? s.slice(0, labelW < 120 ? 10 : 19) + "…" : s; });
-  rows.each(function (p) {
-    const g = d3.select(this);
-    const cells = g.selectAll("g.cell").data(chans.map(c => ({ c, p, v: (cell.get(p + "|" + c) || 0), share: (cell.get(p + "|" + c) || 0) / chanTot.get(c) })))
-      .join("g").attr("class", "cell").attr("transform", (d, i) => `translate(${labelW + i * cw},0)`);
-    cells.append("rect").attr("x", 1).attr("y", 1).attr("width", cw - 2).attr("height", ch - 2).attr("rx", 4)
-      .attr("fill", d => col(Math.min(d.share, vmax))).attr("opacity", d => state.chan >= 0 && d.c !== state.chan ? .35 : 1);
-    if (cw >= 36) cells.append("text").attr("x", cw / 2).attr("y", ch / 2).attr("dy", ".35em").attr("text-anchor", "middle")
-      .style("font-size", "10.5px").style("pointer-events", "none")
-      .style("fill", d => d.share > vmax * .5 ? (ramp[0].startsWith("#e") ? "#fff" : "#0b0b0b") : "var(--text-2)")
-      .text(d => d.share >= .005 ? Math.round(d.share * 100) : "");
-    cells.on("pointermove", (e, d) => showTip(e, t => {
-      t.append(el("div", "t", CH_NAMES[d.c])); t.append(el("div", "big", fmtPct(d.share)));
-      t.append(el("div", null, `${D.parties[d.p]} · ${fmtH(d.v)}`));
+  const lightTheme = ramp[0].startsWith("#e");
+  const colX = new Map(chans.map((c, i) => [c, labelW + i * cw]));
+
+  const key = chans.join(",") + "|" + W;
+  if (heat.key !== key) {
+    host.replaceChildren(); heat.key = key;
+    heat.svg = d3.select(host).append("svg").attr("width", W).attr("height", H).attr("role", "img").attr("aria-label", "Part des formations par chaîne");
+    heat.heads = heat.svg.append("g").selectAll("g").data(chans).join("g").attr("class", "colhead")
+      .attr("transform", c => `translate(${colX.get(c) + cw / 2},${headH - 8}) rotate(-50)`)
+      .on("click", (e, c) => { state.chan = state.chan === c ? -1 : c; chanSel.value = state.chan; update(); })
+      .on("pointermove", (e, c) => showTip(e, t => { t.append(el("div", "t", D.channels[c].t)); t.append(el("div", "big", CH_NAMES[c])); t.append(el("div", null, audLabel(c))); }))
+      .on("pointerleave", hideTip);
+    heat.heads.append("text").text(c => CH_NAMES[c]).style("font-size", "11px");
+    chans.forEach((c, i) => { if (i > 0 && D.channels[c].t !== D.channels[chans[i - 1]].t)
+      heat.svg.append("line").attr("x1", colX.get(c)).attr("x2", colX.get(c)).attr("y1", headH - 4).attr("y2", H).attr("stroke", "var(--text-2)").attr("stroke-width", 1).attr("stroke-dasharray", "2 3"); });
+    heat.colHi = heat.svg.append("rect").attr("y", headH - 2).attr("height", ch * N_HEAT + 4).attr("width", cw).attr("rx", 6)
+      .attr("fill", "none").attr("stroke", "var(--accent)").attr("stroke-width", 2).style("pointer-events", "none").attr("opacity", 0);
+    heat.rows = heat.svg.insert("g", "rect");
+  }
+  heat.heads.select("text").style("font-weight", c => c === sel ? 700 : 500).style("fill", c => c === sel ? "var(--accent)" : "var(--text-2)");
+  if (sel >= 0) heat.colHi.attr("x", colX.get(sel)).transition().duration(300).attr("opacity", 1);
+  else heat.colHi.transition().duration(300).attr("opacity", 0);
+
+  const t = heat.svg.transition().duration(750).ease(d3.easeCubicInOut);
+  const y = j => headH + j * ch;
+  const rows = heat.rows.selectAll("g.hrow").data(parties, p => p);
+  const enter = rows.enter().append("g").attr("class", "hrow").attr("transform", `translate(0,${y(N_HEAT)})`).style("opacity", 0);
+  enter.append("rect").attr("x", 0).attr("y", ch / 2 - 5).attr("width", 10).attr("height", 10).attr("rx", 3).attr("fill", p => pc(D.parties[p]));
+  enter.append("text").attr("class", "plabel").attr("x", 16).attr("y", ch / 2).attr("dy", ".35em").style("font-size", "12px").style("fill", "var(--text-2)")
+    .text(p => { const s = short(D.parties[p]); return s.length > (labelW < 120 ? 11 : 22) ? s.slice(0, labelW < 120 ? 10 : 21) + "…" : s; });
+  enter.each(function (p) {
+    const cells = d3.select(this).selectAll("g.cell").data(chans.map(c => ({ c, p }))).join("g").attr("class", "cell")
+      .attr("transform", d => `translate(${colX.get(d.c)},0)`);
+    cells.append("rect").attr("x", 1).attr("y", 1).attr("width", cw - 2).attr("height", ch - 2).attr("rx", 4);
+    if (cw >= 36) cells.append("text").attr("x", cw / 2).attr("y", ch / 2).attr("dy", ".35em").attr("text-anchor", "middle").style("font-size", "10.5px").style("pointer-events", "none");
+    cells.on("pointermove", (e, d) => showTip(e, tt => {
+      tt.append(el("div", "t", CH_NAMES[d.c])); tt.append(el("div", "big", fmtPct(heat.share(d.p, d.c))));
+      tt.append(el("div", null, `${D.parties[d.p]} · ${fmtH(heat.cell.get(d.p + "|" + d.c) || 0)}`));
     })).on("pointerleave", hideTip)
       .on("click", (e, d) => { state.chan = state.chan === d.c ? -1 : d.c; chanSel.value = state.chan; update(); });
   });
+  heat.share = share; heat.cell = cell;
+  const all = enter.merge(rows);
+  all.transition(t).attr("transform", p => `translate(0,${y(parties.indexOf(p))})`).style("opacity", 1);
+  all.select("text.plabel").style("font-weight", (p, j) => sel >= 0 && parties.indexOf(p) < 3 ? 700 : 400);
+  all.selectAll("g.cell").each(function (d) {
+    const v = share(d.p, d.c), g = d3.select(this);
+    g.select("rect").transition(t).attr("fill", col(Math.min(v, vmax))).attr("opacity", sel >= 0 && d.c !== sel ? .35 : 1);
+    g.select("text").style("fill", v > vmax * .5 ? (lightTheme ? "#fff" : "#0b0b0b") : "var(--text-2)").text(v >= .005 ? Math.round(v * 100) : "");
+  });
+  rows.exit().transition(t).attr("transform", `translate(0,${y(N_HEAT + 1)})`).style("opacity", 0).remove();
 }
 
 /* ---------- Tableau ---------- */
@@ -803,7 +865,7 @@ document.getElementById("theme").onclick = () => {
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = dark ? "light" : "dark";
   try { localStorage.setItem("tp-theme", root.dataset.theme); } catch (e) {}
-  renderHeat();
+  heat.key = null; renderHeat();
 };
 try { const t = localStorage.getItem("tp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 
@@ -816,10 +878,10 @@ function update() {
   document.getElementById("raceSub").textContent = (state.candOnly ? "Les 12 candidats 2027 les plus entendus" : "Les 12 personnalités les plus entendues") + " · cliquez une barre pour voir la fiche";
   renderKPIs(); renderRace(); renderPerson(); renderStream(); renderHeat(); renderTable();
 }
-let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; update(); }, 150); });
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { race.svg = null; heat.key = null; update(); }, 150); });
 update();
 // Petite intro : la course démarre seule au chargement
-state.raceMonth = 0; renderRace(false); setTimeout(() => playBtn.click(), 600);
+state.raceMonth = state.m0; renderRace(false); setTimeout(() => playBtn.click(), 600);
 </script>
 </body>
 </html>

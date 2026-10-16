@@ -1,4 +1,10 @@
-"""Convertit les CSV Arcom (temps de parole mensuels) en un JSON compact pour la visualisation."""
+"""Convertit les CSV Arcom en un JSON compact pour la visualisation.
+
+Deux sources sont fusionnées :
+- data/raw/<partis|personnalites>_AAAA-MM.csv : relevés mensuels hors périodes électorales ;
+- data/raw/elections/<scrutin>.csv : relevés de campagne (fetch_elections.py), publiés en
+  périodes cumulées par chaîne, ramenés ici à des montants mensuels.
+"""
 import csv, glob, json, os, re, sys, unicodedata
 from collections import Counter, defaultdict
 
@@ -8,6 +14,21 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "site", "da
 SHORT = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
 FULL = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
 SKIP = re.compile(r"^(Total|Part|dont) ")
+CAMPAIGN = 3  # type d'émission « campagne électorale » (non ventilé par l'Arcom)
+
+# Identifiants de chaîne des relevés de campagne -> noms des relevés mensuels
+CHANNEL_SLUGS = {
+    "tf1": "TF1", "france_2": "France 2", "france_3": "France 3", "france_5": "France 5", "m6": "M6", "tmc": "TMC",
+    "w9": "W9", "t18": "T18", "novo19": "Novo19", "rmc_life": "RMC Life", "rmc_decouverte": "RMC Decouverte",
+    "rmc_story": "RMC Story", "c8": "C8", "bfmtv": "BFMTV", "cnews": "CNews", "lci": "LCI", "franceinfo_TV": "franceinfo:",
+    "france_info": "France Info", "france_culture": "France Culture", "france_inter": "France Inter",
+    "radio_classique": "Radio Classique", "bfm_business": "BFM Business", "rmc": "RMC", "rtl": "RTL",
+    "europe_1": "Europe 1", "sud_radio": "Sud Radio",
+}
+NEW_CHANNEL_TYPES = {"W9": "Chaîne généraliste"}
+ELECTION_NAMES = {"municipales": "Municipales", "presidentielle": "Présidentielle", "legislatives": "Législatives",
+                  "europeennes": "Européennes", "europennes": "Européennes", "regionales-departementales": "Régionales"}
+LISTS_LABEL = {"municipales": "Listes municipales (campagne)"}
 
 
 def secs(v):
@@ -35,7 +56,8 @@ def period_of(path):
 
 
 channels, chan_type, people, parties = [], {}, {}, {}
-P, G = defaultdict(int), []  # sparse records
+party_key = {}  # forme normalisée -> libellé retenu
+P, G = defaultdict(int), defaultdict(int)  # clés -> secondes
 
 
 def idx(lst, v):
@@ -44,13 +66,55 @@ def idx(lst, v):
     return lst.index(v)
 
 
-paths = sorted(glob.glob(os.path.join(SRC, "**", "*.csv"), recursive=True))
-periods = sorted({period_of(p) for p in paths})
+def party_id(label):
+    # « PARTI SOCIALISTE » et « Parti socialiste » désignent la même formation
+    k = norm(label)
+    if k not in party_key:
+        party_key[k] = label
+        parties[label] = len(parties)
+    return parties[party_key[k]]
+
+
+# ---------- Relevés mensuels hors périodes électorales ----------
+paths = sorted(glob.glob(os.path.join(SRC, "*.csv")))
+monthly = []
+for path in paths:
+    rows = list(csv.reader(open(path, encoding="utf-8-sig"), delimiter=";"))
+    monthly.append((period_of(path), rows))
+
+# ---------- Relevés de campagne : cumuls par période -> montants mensuels ----------
+elections, campaign = [], []  # campaign : (année, mois, chaîne, type, libellé, circonscription, secondes)
+for path in sorted(glob.glob(os.path.join(SRC, "elections", "*.csv"))):
+    rows = list(csv.DictReader(open(path, encoding="utf-8")))
+    if not rows:
+        continue
+    slug = rows[0]["scrutin"]
+    kind = re.match(r"[a-z-]+?(?=-\d{4})", slug).group(0)
+    year = re.search(r"\d{4}", slug).group(0)
+    elections.append({"name": f"{ELECTION_NAMES.get(kind, kind.title())} {year}",
+                      "start": min(r["debut"] for r in rows), "end": max(r["fin"] for r in rows)})
+    # Dans chaque tour, les périodes partagent leur date de début : ce sont des cumuls
+    series = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        key = (r["chaine"], r["tour"], r["debut"], r["type"], r["circonscription"], r["libelle"])
+        series[key][r["fin"]] += int(r["secondes"])
+    for (chaine, tour, debut, typ, circ, lib), by_end in series.items():
+        prev = 0
+        by_month = defaultdict(int)
+        for fin in sorted(by_end):
+            by_month[fin[:7]] = max(by_month[fin[:7]], by_end[fin])
+        for ym in sorted(by_month):
+            cum = max(prev, by_month[ym])
+            if cum > prev:
+                y, mo = (int(x) for x in ym.split("-"))
+                campaign.append((y, mo, chaine, typ, lib, circ, cum - prev, kind))
+            prev = cum
+
+periods = sorted({p for p, _ in monthly} | {(c[0], c[1]) for c in campaign})
 pindex = {p: i for i, p in enumerate(periods)}
 
-for path in paths:
-    m = pindex[period_of(path)]
-    rows = list(csv.reader(open(path, encoding="utf-8-sig"), delimiter=";"))
+for period, rows in monthly:
+    m = pindex[period]
     is_person = rows[0][1] == "Appartenance"
     off = 2 if is_person else 1
     hdr_c, hdr_s, hdr_t = rows[0], rows[1], rows[2]
@@ -76,32 +140,65 @@ for path in paths:
             label = r[0].strip()
             if SKIP.match(label):
                 continue
-            gid = parties.setdefault(label, len(parties))
+            gid = party_id(label)
             for j, ci, ti in cols:
                 s = secs(r[j]) if j < len(r) else 0
                 if s:
-                    G.append([gid, m, ci, ti, s])
+                    G[(gid, m, ci, ti)] += s
+
+ROLES = {"Ministre", "Premier Ministre"}
+
+
+def main_affiliation(v):
+    affs = [a for a, _ in v["affs"].most_common() if a not in ROLES]
+    aff = affs[0] if affs else "Gouvernement"
+    return "Président de la République" if aff.startswith("Président de la République") else aff
+
+
+unmapped = Counter()
+for y, mo, chaine, typ, lib, circ, s, kind in campaign:
+    name = CHANNEL_SLUGS.get(chaine)
+    if not name:
+        unmapped[chaine] += s
+        continue
+    chan_type.setdefault(name, NEW_CHANNEL_TYPES.get(name, "Chaîne généraliste"))
+    ci, m = idx(channels, name), pindex[(y, mo)]
+    if typ.startswith("Président de la République"):
+        G[(party_id("Président de la République"), m, ci, CAMPAIGN)] += s
+    elif typ.startswith("Partis"):
+        G[(party_id(lib), m, ci, CAMPAIGN)] += s
+    elif typ.startswith("Listes"):
+        G[(party_id(LISTS_LABEL.get(kind, "Listes candidates (campagne)")), m, ci, CAMPAIGN)] += s
+    else:
+        # Scrutins à candidats (présidentielle…) : rattachés à la personnalité si on la connaît
+        key = norm(re.sub(r"^(Liste|M\.|Mme)\s+", "", lib))
+        if key in people:
+            P[(key, m, ci, CAMPAIGN)] += s
+            people[key]["names"].setdefault(lib, 0)
+            G[(party_id(main_affiliation(people[key])), m, ci, CAMPAIGN)] += s
+        else:
+            G[(party_id(f"{typ} (campagne)"), m, ci, CAMPAIGN)] += s
+if unmapped:
+    print("chaînes de campagne non reconnues :", dict(unmapped), file=sys.stderr)
 
 party_names = list(parties)
-ROLES = {"Ministre", "Premier Ministre"}
-keys = [k for k, v in people.items() if v["names"]]
+keys = [k for k, v in people.items() if sum(v["names"].values())]
 pidx = {k: i for i, k in enumerate(keys)}
 people_out = []
 for k in keys:
     v = people[k]
-    affs = [a for a, _ in v["affs"].most_common() if a not in ROLES]
     roles = [a for a in v["affs"] if a in ROLES]
-    aff = affs[0] if affs else "Gouvernement"
-    if aff.startswith("Président de la République"):
-        aff = "Président de la République"
-    people_out.append([display(v["names"]), aff, 1 if roles else 0])
-P = [[pidx[k], m, ci, ti, s] for (k, m, ci, ti), s in P.items()]
+    people_out.append([display(v["names"]), main_affiliation(v), 1 if roles else 0])
+P = [[pidx[k], m, ci, ti, s] for (k, m, ci, ti), s in P.items() if k in pidx]
+G = [[g, m, ci, ti, s] for (g, m, ci, ti), s in G.items()]
 data = {
     "months": [SHORT[mm - 1] for y, mm in periods],
     "years": [y for y, mm in periods],
     "monthsFull": [f"{FULL[mm - 1]} {y}" for y, mm in periods],
+    "ym": [f"{y}-{mm:02d}" for y, mm in periods],
     "channels": [{"n": c, "t": chan_type[c]} for c in channels],
-    "types": ["Journaux", "Magazines", "Autres programmes"],
+    "types": ["Journaux", "Magazines", "Autres programmes", "Campagne électorale"],
+    "elections": elections,
     "parties": party_names,
     "people": people_out,
     "P": P,
@@ -111,4 +208,5 @@ with open(OUT, "w", encoding="utf-8") as f:
     f.write("window.TP_DATA=")
     json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     f.write(";")
-print(len(periods), "mois,", len(people_out), "personnalités,", len(party_names), "partis,", len(channels), "chaînes,", len(P), "+", len(G), "enregistrements,", os.path.getsize(OUT) // 1024, "Ko")
+print(len(periods), "mois,", len(people_out), "personnalités,", len(party_names), "partis,", len(channels), "chaînes,",
+      len(elections), "scrutin(s),", len(P), "+", len(G), "enregistrements,", os.path.getsize(OUT) // 1024, "Ko")
