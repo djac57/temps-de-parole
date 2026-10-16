@@ -257,6 +257,7 @@ footer a { color: var(--accent); }
     JT = journaux télévisés et radio, Magazines = magazines d'information, Autres = autres programmes.
     Les personnalités sont rattachées à leur formation principale&nbsp;; les membres du gouvernement sans étiquette apparaissent sous «&nbsp;Gouvernement&nbsp;».
     Le graphique par formation et la heatmap utilisent les relevés « partis », qui comptent l'exécutif (Président, Gouvernement) à part.
+    Les relevés « partis » sont complets ; les listes par personnalité ne retiennent que les temps cumulés supérieurs à une minute, d'où un léger écart (≈ 3 %) entre le total et la somme des personnalités.
   </footer>
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
@@ -427,7 +428,10 @@ function renderKPIs() {
   for (const r of D.P) if (recOK(r)) chans.set(r[2], (chans.get(r[2]) || 0) + r[4]);
   const topChan = [...chans].sort((a, b) => b[1] - a[1])[0];
   const items = [
-    ["Temps de parole total", fmtH(total), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes`],
+    // Total complet issu des relevés par parti ; les listes par personnalité omettent les cumuls < 1 min
+    state.candOnly
+      ? ["Temps de parole des candidats", fmtH(total), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes`]
+      : ["Temps de parole total", fmtH(partyTotal), `${state.m1 - state.m0 + 1} mois · ${chans.size} chaînes · dont ${fmtPct(Math.max(0, 1 - total / partyTotal))} sous le seuil d'1 min`],
     [state.candOnly ? "Candidats 2027 entendus" : "Personnalités entendues", n.toLocaleString("fr-FR"), state.candOnly ? `sur ${CANDIDATES.length} déclarés ou pressentis` : "au moins une seconde d'antenne"],
     [state.candOnly ? "Candidat n°1" : "Personnalité n°1", best >= 0 ? prettyName(D.people[best][0]) : "—", best >= 0 ? `${fmtH(tp[best])} · ${short(D.people[best][1])}` : ""],
     ["Formation n°1 (hors exécutif)", topParty ? short(D.parties[topParty[0]]) : "—", topParty ? `${fmtPct(topParty[1] / partyTotal)} du temps · ${topChan ? CH_NAMES[topChan[0]] + " la plus bavarde" : ""}` : ""],
