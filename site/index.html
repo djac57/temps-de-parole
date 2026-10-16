@@ -53,6 +53,9 @@ header.hero { display: flex; justify-content: space-between; gap: 24px; align-it
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 h1 { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: clamp(30px, 5vw, 50px); line-height: 1.05; margin: 6px 0 10px; letter-spacing: -.02em; text-wrap: balance; }
 .lede { color: var(--text-2); max-width: 680px; margin: 0; font-size: 15px; }
+.source { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.source a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.source a:hover { text-decoration: underline; }
 h2 { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
 button { font: inherit; color: inherit; }
@@ -181,6 +184,7 @@ footer a { color: var(--accent); }
       <div class="eyebrow">Arcom · Pluralisme politique · 2025–2026</div>
       <h1>Qui parle à la télé et à la radio&nbsp;?</h1>
       <p class="lede">Le temps de parole des personnalités politiques, mois par mois, sur 25 chaînes et radios nationales, <span id="span"></span>. Choisissez une période, un type de média ou une chaîne&nbsp;: tous les graphiques se mettent à jour.</p>
+      <p class="source">Source&nbsp;: données publiques <a href="https://www.arcom.fr/temps-parole" target="_blank" rel="noopener">Arcom</a></p>
     </div>
     <button class="icon-btn" id="theme" title="Changer de thème" aria-label="Changer de thème">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
