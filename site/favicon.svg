@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Téléviseur rétro : antenne, écran, barres de son (temps de parole) -->
+  <path d="M22 6 32 17 42 6" fill="none" stroke="#1c5cab" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22" cy="6" r="3.5" fill="#1c5cab"/>
+  <circle cx="42" cy="6" r="3.5" fill="#1c5cab"/>
+  <rect x="4" y="17" width="56" height="40" rx="10" fill="#2a78d6"/>
+  <rect x="11" y="23" width="34" height="28" rx="6" fill="#f6f5f1"/>
+  <rect x="17" y="34" width="4" height="10" rx="2" fill="#eb6834"/>
+  <rect x="24" y="29" width="4" height="15" rx="2" fill="#eb6834"/>
+  <rect x="31" y="32" width="4" height="12" rx="2" fill="#eb6834"/>
+  <rect x="38" y="36" width="4" height="8" rx="2" fill="#eb6834"/>
+  <circle cx="52" cy="30" r="3.5" fill="#f6f5f1"/>
+  <circle cx="52" cy="41" r="3.5" fill="#cde2fb"/>
+  <rect x="14" y="57" width="8" height="5" rx="2" fill="#1c5cab"/>
+  <rect x="42" y="57" width="8" height="5" rx="2" fill="#1c5cab"/>
+</svg>
