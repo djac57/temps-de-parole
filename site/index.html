@@ -185,6 +185,7 @@ footer a { color: var(--accent); }
       <h1>Qui parle à la télé et à la radio&nbsp;?</h1>
       <p class="lede">Le temps de parole des personnalités politiques, mois par mois, sur 25 chaînes et radios nationales, <span id="span"></span>. Choisissez une période, un type de média ou une chaîne&nbsp;: tous les graphiques se mettent à jour.</p>
       <p class="source">Source&nbsp;: données publiques <a href="https://www.arcom.fr/temps-parole" target="_blank" rel="noopener">Arcom</a></p>
+      <p class="source" id="lag"></p>
     </div>
     <button class="icon-btn" id="theme" title="Changer de thème" aria-label="Changer de thème">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -274,6 +275,20 @@ const MONTHS_FULL = D.monthsFull, NM = D.months.length, LAST = NM - 1;
 const DEFAULT_M0 = D.years.indexOf(D.years[LAST]); // par défaut : l'année la plus récente
 const ml = i => D.months[i] + " " + String(D.years[i]).slice(2); // « Jan 26 »
 const YEARS = [...new Set(D.years)];
+// Décalage de publication : l'Arcom publie chaque mois avec plusieurs mois de retard
+(() => {
+  const [ly, lm] = D.ym[LAST].split("-").map(Number), now = new Date();
+  const missing = [];
+  for (let y = ly, m = lm + 1; y * 12 + m < now.getFullYear() * 12 + now.getMonth() + 1; m++) {
+    if (m > 12) { m = 1; y++; }
+    if (y * 12 + m >= now.getFullYear() * 12 + now.getMonth() + 1) break;
+    missing.push(new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long" }));
+  }
+  const last = MONTHS_FULL[LAST].toLowerCase();
+  const list = missing.length > 1 ? missing.slice(0, -1).join(", ") + " et " + missing.at(-1) : missing[0];
+  document.getElementById("lag").textContent = `Dernier mois publié : ${last}. L'Arcom publie ses relevés avec deux à trois mois de décalage`
+    + (missing.length ? ` : ${list} ne ${missing.length > 1 ? "sont" : "est"} pas encore disponible${missing.length > 1 ? "s" : ""}.` : ".");
+})();
 document.getElementById("span").textContent = document.getElementById("span2").textContent = `de ${MONTHS_FULL[0].toLowerCase()} à ${MONTHS_FULL[LAST].toLowerCase()}`;
 const TYPES = ["JT", "Magazines", "Autres", "Campagne"];
 const SVC = [["Chaîne généraliste","TV généralistes"],["Chaîne d'information","Info continue"],["Radio","Radios"]];
