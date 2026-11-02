@@ -27,12 +27,15 @@ jobs:
           python-version: "3.12"
 
       - name: Télécharger les relevés Arcom
+        continue-on-error: true   # source externe en panne : on garde les dernières données, le site se déploie quand même
         run: python scripts/fetch_arcom.py
 
       - name: Télécharger les relevés de campagne électorale
+        continue-on-error: true
         run: python scripts/fetch_elections.py
 
       - name: Construire data.js
+        continue-on-error: true
         run: python scripts/build_data.py
 
       - name: Committer les nouvelles données
